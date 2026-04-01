@@ -1,4 +1,5 @@
 import asyncio
+import re
 from urllib.parse import urlparse
 from typing import Dict, Any
 from bs4 import BeautifulSoup
@@ -6,21 +7,15 @@ from markdownify import markdownify as md
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode
 
 async def parse_reddit_post(url: str) -> Dict[str, Any]:
-    """
-    Estrae le informazioni da un post di Reddit combinando Crawl4AI e BeautifulSoup.
-    Utilizza le configurazioni avanzate del browser come richiesto dal corso.
-    """
     dominio = urlparse(url).netloc
-
     dati: Dict[str, Any] = {
-        "url": url,
-        "domain": dominio,
-        "title": "",
-        "html_text": "",
+        "url": url, 
+        "domain": dominio, 
+        "title": "", 
+        "html_text": "", 
         "parsed_text": ""
     }
 
-    # 1. Configurazione del browser (headless=True significa invisibile)
     browser_cfg = BrowserConfig(headless=True)
     run_cfg = CrawlerRunConfig(cache_mode=CacheMode.BYPASS)
 
@@ -31,31 +26,43 @@ async def parse_reddit_post(url: str) -> Dict[str, Any]:
         dati["html_text"] = result.html
         soup = BeautifulSoup(result.html, "html.parser")
 
-        # 1. Estrazione Titolo precisa
+        # 1. Titolo pulito
         tag_titolo = soup.find("h1")
-        dati["title"] = tag_titolo.get_text(strip=True) if tag_titolo else "Titolo non trovato"
+        dati["title"] = tag_titolo.get_text(strip=True) if tag_titolo else ""
 
-        # 2. Pulizia: Cerchiamo l'area principale del post (shreddit-post)
-        # Reddit usa tag specifici come <shreddit-post>. Cerchiamo quello o il div principale.
-        main_content = soup.find("shreddit-post") or soup.find("div", {"data-test-id": "post-content"})
-        
+        # 2. Selezione mirata del corpo del post
+        # Cerchiamo specificamente il div che contiene il TESTO del post, non tutto lo shreddit-post
+        main_content = soup.find("div", {"slot": "text-body"}) or \
+                       soup.find("div", {"data-test-id": "post-content"}) or \
+                       soup.find("shreddit-post")
+
         if main_content:
-            # Rimuoviamo elementi di disturbo interni al post
-            for trash in main_content.select("shreddit-post-flair, faceplate-batch, .reward-button"):
-                trash.decompose()
+            # Pulizia aggressiva degli elementi UI che sporcano la Precision
+            for noisy in main_content.select("button, faceplate-hovercard, shreddit-post-flair, .reward-button, i, svg, aside"):
+                noisy.decompose()
+
+            # 3. Conversione in Markdown
+            testo_markdown = md(str(main_content), heading_style="ATX")
+
+            # 4. Filtro per righe di "navigazione" o "social"
+            # Escludiamo parole chiave che Reddit mette in fondo o ai lati
+            blacklist_keywords = ["share", "reply", "save", "comment", "award", "report", "vote"]
             
-            # Convertiamo solo l'area del post in Markdown
-            dati["parsed_text"] = md(str(main_content), heading_style="ATX")
+            lines = []
+            for line in testo_markdown.splitlines():
+                clean_line = line.strip()
+                # Teniamo la riga solo se:
+                # - Non è vuota
+                # - È più lunga di 15 caratteri (evita "2 comments", "Share", ecc.)
+                # - Non contiene esclusivamente parole social della blacklist
+                if len(clean_line) > 15:
+                    low_line = clean_line.lower()
+                    if not any(word == low_line for word in blacklist_keywords):
+                        lines.append(clean_line)
+
+            dati["parsed_text"] = "\n\n".join(lines).strip()
         else:
-            # Fallback se non trova il contenitore specifico
-            dati["parsed_text"] = result.markdown # Usa quello di crawl4ai se fallisce soup
+            # Fallback se non troviamo il div specifico, usiamo il markdown di sistema pulito
+            dati["parsed_text"] = result.markdown
 
         return dati
-
-if __name__ == "__main__":
-    url_di_prova = "https://www.reddit.com/r/Universitaly/comments/1s9i7ru/ingegneria_informatica_ragazza_che_copia_a_tutti/"
-    risultato_test = asyncio.run(parse_reddit_post(url_di_prova))
-    
-    for k, v in risultato_test.items():
-        valore_stampato = str(v)[:100] + "..." if v and len(str(v)) > 100 else v
-        print(f"{k}: {valore_stampato}")
