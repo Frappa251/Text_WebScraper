@@ -1,4 +1,7 @@
 fastapi
 uvicorn
-crawl4ai
 pydantic
+crawl4ai
+beautifulsoup4
+playwright
+markdownify
