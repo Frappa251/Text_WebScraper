@@ -18,28 +18,16 @@ STOP_SECTIONS = {
 
 
 def clean_wikipedia_markdown(text: str) -> str:
-    """Pulisce il markdown mantenendo una struttura leggibile."""
-    # [testo](url) -> testo
-    text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
-
-    # rimuove enfasi markdown
+    text = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', text)
     text = text.replace("**", "").replace("__", "")
-    text = re.sub(r"(?m)^\s*[-*+]\s*", "", text)
 
-    # rimuove righe-tabella markdown
     lines = []
     for line in text.splitlines():
         stripped = line.strip()
-
         if not stripped:
             continue
 
-        if stripped.startswith("|") and stripped.endswith("|"):
-            continue
-
-        if re.fullmatch(r"[-|:\s]+", stripped):
-            continue
-
+        # NON rimuovere le righe tabella, servono per le list pages
         lines.append(stripped)
 
     return "\n\n".join(lines).strip()
@@ -55,7 +43,7 @@ def extract_wikipedia_main_content(html: str) -> str:
     if main is None:
         return ""
 
-    # rimuove elementi rumorosi
+    # rimuovi solo tabelle decorative, NON le wikitable dati
     for selector in [
         "table.infobox",
         "table.sidebar",
@@ -67,37 +55,65 @@ def extract_wikipedia_main_content(html: str) -> str:
         "div.hatnote",
         "div.thumb",
         "div.sistersitebox",
-        "div.shortdescription",
         "sup.reference",
         "span.mw-editsection",
         "style",
         "script",
         ".mw-jump-link",
-        ".printfooter",
+        ".printfooter"
     ]:
         for tag in main.select(selector):
             tag.decompose()
 
+    # disambiguation
+    is_disambiguation = "may refer to" in soup.get_text(" ", strip=True).lower()
+
+    # list/table page
+    has_data_table = len(main.select("table.wikitable")) > 0
+
     parts = [f"# {title}"] if title else []
 
-    # prende il contenuto in ordine e si ferma prima delle sezioni finali rumorose
-    for elem in main.find_all(["p", "h2", "h3"], recursive=True):
+    stop_sections = {
+        "See also",
+        "References",
+        "External links",
+        "Further reading",
+        "Notes",
+        "Bibliography",
+        "Sources",
+    }
+
+    if is_disambiguation:
+        elements = main.find_all(["p", "ul"])
+    elif has_data_table:
+        elements = main.find_all(["p", "h2", "h3", "table"])
+    else:
+        elements = main.find_all(["p", "h2", "h3"])
+
+    for elem in elements:
         text = elem.get_text(" ", strip=True)
         if not text:
             continue
 
-        if elem.name in {"h2", "h3"}:
+        if elem.name in ["h2", "h3"]:
             section_title = text.replace("[edit]", "").strip()
-            if section_title in STOP_SECTIONS:
+            if section_title in stop_sections:
                 break
-            parts.append(f"## {section_title}" if elem.name == "h2" else f"### {section_title}")
+            parts.append(str(elem))
             continue
 
-        # tiene solo paragrafi abbastanza informativi
-        if len(text) < 40:
+        if elem.name == "p":
+            if not is_disambiguation and len(text) < 40:
+                continue
+            parts.append(str(elem))
             continue
 
-        parts.append(str(elem))
+        if elem.name == "ul" and is_disambiguation:
+            parts.append(str(elem))
+            continue
+
+        if elem.name == "table" and "wikitable" in (elem.get("class") or []):
+            parts.append(str(elem))
 
     raw_md = md("\n".join(parts), heading_style="ATX")
     return clean_wikipedia_markdown(raw_md)
