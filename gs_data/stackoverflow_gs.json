@@ -1,0 +1,9 @@
+[
+  {
+    "url": "https://stackoverflow.com/questions/123456/example-question",
+    "domain": "stackoverflow.com",
+    "title": "Example question title",
+    "html_text": "",
+    "gold_text": "Testo della domanda e della risposta rilevante scelta nel gold standard."
+  }
+]
