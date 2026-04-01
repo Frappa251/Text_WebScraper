@@ -30,23 +30,36 @@ def load_supported_domains() -> List[str]:
         # Fallback obbligatorio per evitare crash all'avvio
         return ["www.reddit.com", "it.wikipedia.org", "en.wikipedia.org"]
 
-def load_gs_data(domain: str) -> List[dict]:
-    """
-    Legge il file Gold Standard specifico dalla cartella gs_data/
-    """
-    # Pulizia nome dominio per trovare il file (es: it.wikipedia.org -> wikipedia_gs.json)
-    nome_base = domain.replace("www.", "").split(".")
-    # Gestione nomi come it.wikipedia -> wikipedia
-    nome_file = (nome_base[1] if len(nome_base) > 2 else nome_base[0]) + "_gs.json"
-    file_path = os.path.join("gs_data", nome_file)
+def load_gs_data(domain: str) -> list[dict]:
+    """Legge il file GS usando percorsi relativi alla posizione dello script."""
     
+    # 1. Identifica la cartella dove si trova server.py (backend/src/)
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    # 2. Risale di due livelli per arrivare alla ROOT del progetto
+    # Da backend/src/ -> backend/ -> ROOT/
+    root_dir = os.path.abspath(os.path.join(current_dir, "..", ".."))
+    
+    # 3. Estrae il nome base (es. 'wikipedia' da 'en.wikipedia.org')
+    parts = domain.replace("www.", "").split(".")
+    nome_base = parts[1] if len(parts) > 2 else parts[0]
+    
+    # 4. Costruisce il percorso verso gs_data
+    file_path = os.path.join(root_dir, "gs_data", f"{nome_base}_gs.json")
+    
+    # DEBUG: Stampa il percorso nel terminale così vedi se è giusto
+    print(f"DEBUG: Cerco il file GS in: {file_path}")
+
     if not os.path.exists(file_path):
+        print(f"DEBUG: File NON trovato!")
         return []
         
     try:
         with open(file_path, "r", encoding="utf-8") as f:
-            return json.load(f).get("gold_standard", [])
-    except Exception:
+            data = json.load(f)
+            return data.get("gold_standard", [])
+    except Exception as e:
+        print(f"ERRORE durante la lettura: {e}")
         return []
 
 # --- ENDPOINTS ---
