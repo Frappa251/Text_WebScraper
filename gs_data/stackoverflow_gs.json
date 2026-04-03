@@ -1,9 +1,73 @@
-[
+{
+  "gold_standard":[
   {
-    "url": "https://stackoverflow.com/questions/123456/example-question",
+    "url": "https://stackoverflow.com/questions/927358/how-do-i-undo-the-most-recent-local-commits-in-git",
     "domain": "stackoverflow.com",
-    "title": "Example question title",
-    "html_text": "",
-    "gold_text": "Testo della domanda e della risposta rilevante scelta nel gold standard."
+    "title": "How do I undo the most recent local commits in Git?",
+    "html_text": "<!DOCTYPE html><html class=\"client-nojs\" ... > ... </html>",
+    "gold_text": "How do I undo the most recent local commits in Git?\n\nI accidentally committed the wrong files to Git, but didn't push the commit to the server yet.\n\nHow do I undo those commits from the local repository?"
+  },
+  {
+    "url": "https://stackoverflow.com/questions/503093/how-do-i-redirect-to-another-webpage",
+    "domain": "stackoverflow.com",
+    "title": "How do I redirect to another webpage?",
+    "html_text": "<!DOCTYPE html><html class=\"client-nojs\" ... > ... </html>",
+    "gold_text": "How do I redirect to another webpage?\n\nHow can I redirect the user from one webpage to another using JavaScript or jQuery?"
+  },
+  {
+    "url": "https://stackoverflow.com/questions/5767325/how-can-i-remove-a-specific-item-from-an-array-in-javascript",
+    "domain": "stackoverflow.com",
+    "title": "How can I remove a specific item from an array in JavaScript?",
+    "html_text": "<!DOCTYPE html><html class=\"client-nojs\" ... > ... </html>",
+    "gold_text": "How can I remove a specific item from an array in JavaScript?\n\nI have an array of numbers and I'm using the .push() method to add elements to it.\n\nIs there a simple way to remove a specific element from an array?\n\nI'm looking for the equivalent of something like:\n\narray.remove(number);\n\nI have to use core JavaScript. Frameworks are not allowed."
+  },
+  {
+    "url": "https://stackoverflow.com/questions/14220321/how-to-return-the-response-from-an-asynchronous-call",
+    "domain": "stackoverflow.com",
+    "title": "How to return the response from an asynchronous call?",
+    "html_text": "<!DOCTYPE html><html class=\"client-nojs\" ... > ... </html>",
+    "gold_text": "How to return the response from an asynchronous call?\n\nI have a function foo which makes an asynchronous request. How can I return the response/result from foo?\n\nI am trying to return the value from the callback, as well as assigning the result to a local variable inside the function and returning that one, but none of those ways actually return the response.\nthey all return undefined or whatever the initial value of the variable result is.\r\n\r\nExample of an asynchronous function that accepts a callback (using jQuery's ajax function):\r\n\r\nfunction foo() {\r\n    var result;\r\n\r\n    $.ajax({\r\n        url: '...',\r\n        success: function(response) {\r\n            result = response;\r\n            \/\/ return response; \/\/ <- I tried that one as well\r\n        }\r\n    });\r\n\r\n    return result; \/\/ It always returns `undefined`\r\n}\r\nExample using Node.js:\r\n\r\nfunction foo() {\r\n    var result;\r\n\r\n    fs.readFile(\"path\/to\/file\", function(err, data) {\r\n        result = data;\r\n        \/\/ return data; \/\/ <- I tried that one as well\r\n    });\r\n\r\n    return result; \/\/ It always returns `undefined`\r\n}\r\nExample using the then block of a promise:\r\n\r\nfunction foo() {\r\n    var result;\r\n\r\n    fetch(url).then(function(response) {\r\n        result = response;\r\n        \/\/ return response; \/\/ <- I tried that one as well\r\n    });\r\n\r\n    return result; \/\/ It always returns `undefined`\r\n}"
+  },
+  {
+    "url": "https://stackoverflow.com/questions/2906582/how-do-i-create-an-html-button-that-acts-like-a-link",
+    "domain": "stackoverflow.com",
+    "title": "How do I create an HTML button that acts like a link?",
+    "html_text": "<!DOCTYPE html><html class=\"client-nojs\" ... > ... </html>",
+    "gold_text": "How do I create an HTML button that acts like a link?\n\nHow do I create an HTML button that acts like a link? So that clicking the button redirects the user to a page.\r\n\r\nI want it to be accessible, and with minimal extra characters or parameters in the URL.\r\n\r\n"
+  },
+  {
+    "url": "https://stackoverflow.com/questions/16245767/creating-a-blob-from-a-base64-string-in-javascript",
+    "domain": "stackoverflow.com",
+    "title": "Creating a Blob from a base64 string in JavaScript",
+    "html_text": "<!DOCTYPE html><html class=\"client-nojs\" ... > ... </html>",
+    "gold_text": "Creating a Blob from a base64 string in JavaScript\n\nIs there a way to construct a Blob from a base64 string? I need to upload this via XHR2."
+  },
+  {
+    "url": "https://stackoverflow.com/questions/1732348/regex-match-open-tags-except-xhtml-self-contained-tags",
+    "domain": "stackoverflow.com",
+    "title": "RegEx match open tags except XHTML self-contained tags",
+    "html_text": "<!DOCTYPE html><html class=\"client-nojs\" ... > ... </html>",
+    "gold_text": "RegEx match open tags except XHTML self-contained tags\n\nI need to match all of these opening tags:\n\n<p>\n<a href=\"foo\">\n\nBut not these:\n\n<br />\n<hr />\n\nHow do I do this?"
+  },
+  {
+    "url": "https://stackoverflow.com/questions/7346563/loading-local-json-file",
+    "domain": "stackoverflow.com",
+    "title": "Loading local JSON file",
+    "html_text": "<!DOCTYPE html><html class=\"client-nojs\" ... > ... </html>",
+    "gold_text": "Loading local JSON file\n\nI have a local JSON file. How can I read this file using JavaScript?"
+  },
+  {"url": "https://stackoverflow.com/questions/6591213/how-do-i-rename-a-local-git-branch",
+    "domain": "stackoverflow.com",
+    "title": "How do I rename a local Git branch?",
+    "html_text": "<!DOCTYPE html><html class=\"client-nojs\" ... > ... </html>",
+    "gold_text": "How do I rename a local Git branch?\n\nI don't want to rename a remote branch, as described in Rename master branch for both local and remote Git repositories.\n\nHow can I rename a local branch which hasn't been pushed to a remote repository?"
+  },
+  {
+    "url": "https://stackoverflow.com/questions/4412373/not-able-to-find-out-why-my-python-code-is-throwing-a-syntaxerror",
+    "domain": "stackoverflow.com",
+    "title": "Not able to find out why my Python code is throwing a SyntaxError",
+    "html_text": "<!DOCTYPE html><html class=\"client-nojs\" ... > ... </html>",
+    "gold_text": "Not able to find out why my Python code is throwing a SyntaxError\n\nI am trying to run a very simple Python script but it keeps throwing a SyntaxError at the end of the file. I have checked my indentation and spelling but everything seems correct.\n\nWhat are the most common reasons for getting a SyntaxError on the last line of a file?"
   }
 ]
+}
