@@ -21,7 +21,8 @@ async def parse_reddit_post(url: str) -> Dict[str, Any]:
 
     async with AsyncWebCrawler(config=browser_cfg) as crawler:
         result = await crawler.arun(url=url, config=run_cfg)
-        if not result.success: return dati
+        if not result.success:
+            return dati
 
         dati["html_text"] = result.html
         soup = BeautifulSoup(result.html, "html.parser")
@@ -38,7 +39,11 @@ async def parse_reddit_post(url: str) -> Dict[str, Any]:
 
         if main_content:
             # Pulizia aggressiva degli elementi UI che sporcano la Precision
-            for noisy in main_content.select("button, faceplate-hovercard, shreddit-post-flair, .reward-button, i, svg, aside"):
+            selectors_da_eliminare = [
+                "button", "faceplate-hovercard", "shreddit-post-flair", 
+                ".reward-button", "i", "svg", "aside"
+            ]
+            for noisy in main_content.select(", ".join(selectors_da_eliminare)):
                 noisy.decompose()
 
             # 3. Conversione in Markdown
