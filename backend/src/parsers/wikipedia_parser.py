@@ -21,16 +21,21 @@ def clean_wikipedia_markdown(text: str) -> str:
     text = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', text)
     text = text.replace("**", "").replace("__", "")
 
-    lines = []
+    cleaned = []
+    prev_blank = False
+
     for line in text.splitlines():
-        stripped = line.strip()
+        stripped = line.rstrip()
         if not stripped:
+            if not prev_blank:
+                cleaned.append("")
+            prev_blank = True
             continue
 
-        # NON rimuovere le righe tabella, servono per le list pages
-        lines.append(stripped)
+        cleaned.append(stripped)
+        prev_blank = False
 
-    return "\n\n".join(lines).strip()
+    return "\n".join(cleaned).strip()
 
 
 def extract_wikipedia_main_content(html: str) -> str:
@@ -39,11 +44,12 @@ def extract_wikipedia_main_content(html: str) -> str:
     title_tag = soup.find("span", class_="mw-page-title-main") or soup.find("h1")
     title = title_tag.get_text(strip=True) if title_tag else ""
 
-    main = soup.find("div", id="mw-content-text")
+    main = soup.select_one("div#mw-content-text div.mw-parser-output")
+    if main is None:
+        main = soup.find("div", id="mw-content-text")
     if main is None:
         return ""
 
-    # rimuovi solo tabelle decorative, NON le wikitable dati
     for selector in [
         "table.infobox",
         "table.sidebar",
@@ -65,10 +71,7 @@ def extract_wikipedia_main_content(html: str) -> str:
         for tag in main.select(selector):
             tag.decompose()
 
-    # disambiguation
     is_disambiguation = "may refer to" in soup.get_text(" ", strip=True).lower()
-
-    # list/table page
     has_data_table = len(main.select("table.wikitable")) > 0
 
     parts = [f"# {title}"] if title else []
@@ -84,18 +87,18 @@ def extract_wikipedia_main_content(html: str) -> str:
     }
 
     if is_disambiguation:
-        elements = main.find_all(["p", "ul"])
+        elements = main.find_all(["p", "ul", "ol", "dl"])
     elif has_data_table:
-        elements = main.find_all(["p", "h2", "h3", "table"])
+        elements = main.find_all(["p", "h2", "h3", "h4", "ul", "ol", "dl", "table"])
     else:
-        elements = main.find_all(["p", "h2", "h3"])
+        elements = main.find_all(["p", "h2", "h3", "h4", "ul", "ol", "dl"])
 
     for elem in elements:
         text = elem.get_text(" ", strip=True)
         if not text:
             continue
 
-        if elem.name in ["h2", "h3"]:
+        if elem.name in ["h2", "h3", "h4"]:
             section_title = text.replace("[edit]", "").strip()
             if section_title in stop_sections:
                 break
@@ -108,16 +111,23 @@ def extract_wikipedia_main_content(html: str) -> str:
             parts.append(str(elem))
             continue
 
-        if elem.name == "ul" and is_disambiguation:
+        if elem.name in ["ul", "ol", "dl"]:
             parts.append(str(elem))
             continue
 
         if elem.name == "table" and "wikitable" in (elem.get("class") or []):
-            parts.append(str(elem))
+            table_lines = []
+            for row in elem.select("tr"):
+                cells = [c.get_text(" ", strip=True) for c in row.select("th, td")]
+                cells = [c for c in cells if c]
+                if cells:
+                    table_lines.append(" | ".join(cells))
+            if table_lines:
+                parts.append("<p>" + "</p><p>".join(table_lines) + "</p>")
+            continue
 
     raw_md = md("\n".join(parts), heading_style="ATX")
     return clean_wikipedia_markdown(raw_md)
-
 
 async def parse_wikipedia_post(url: str) -> dict:
     browser_cfg = BrowserConfig(headless=True)
