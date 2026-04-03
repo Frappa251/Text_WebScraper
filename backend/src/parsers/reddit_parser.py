@@ -15,8 +15,19 @@ async def parse_reddit_post(url: str) -> Dict[str, Any]:
         "parsed_text": ""
     }
 
-    browser_cfg = BrowserConfig(headless=True)
-    run_cfg = CrawlerRunConfig(cache_mode=CacheMode.BYPASS)
+    headers_inglesi = {
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate, br",
+    }
+
+    browser_cfg = BrowserConfig(
+        headless=True,
+        headers=headers_inglesi
+    )
+    
+    run_cfg = CrawlerRunConfig(
+        cache_mode=CacheMode.BYPASS,
+    )
 
     async with AsyncWebCrawler(config=browser_cfg) as crawler:
         result = await crawler.arun(url=url, config=run_cfg)
