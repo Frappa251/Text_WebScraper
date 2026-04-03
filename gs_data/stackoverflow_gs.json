@@ -40,14 +40,14 @@
     "domain": "stackoverflow.com",
     "title": "Creating a Blob from a base64 string in JavaScript",
     "html_text": "<!DOCTYPE html><html class=\"client-nojs\" ... > ... </html>",
-    "gold_text": "Creating a Blob from a base64 string in JavaScript\n\nIs there a way to construct a Blob from a base64 string? I need to upload this via XHR2."
+    "gold_text": "Creating a Blob from a base64 string in JavaScript\r\nI have base64-encoded binary data in a string.\r\n\r\nconst contentType = 'image\/png';\r\nconst b64Data = 'iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4\/\/8\/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg==';\r\nI would like to create a blob: URL containing this data and display it to the user.\r\n\r\nconst blob = new Blob(????, {type: contentType});\r\nconst blobUrl = URL.createObjectURL(blob);\r\n\r\nwindow.location = blobUrl;\r\nI haven't been able to figure out how to create the Blob.\r\n\r\nIn some cases, I can avoid this by using a data: URL instead.\r\n\r\nconst dataUrl = `data:${contentType};base64,${b64Data}`;\r\n\r\nwindow.location = dataUrl;\r\nHowever in most cases the data: URLs are prohibitively large.\r\n\r\nHow can I decode a base64 string to a Blob object in JavaScript?"
   },
   {
     "url": "https://stackoverflow.com/questions/1732348/regex-match-open-tags-except-xhtml-self-contained-tags",
     "domain": "stackoverflow.com",
     "title": "RegEx match open tags except XHTML self-contained tags",
     "html_text": "<!DOCTYPE html><html class=\"client-nojs\" ... > ... </html>",
-    "gold_text": "RegEx match open tags except XHTML self-contained tags\n\nI need to match all of these opening tags:\n\n<p>\n<a href=\"foo\">\n\nBut not these:\n\n<br />\n<hr />\n\nHow do I do this?"
+    "gold_text": "RegEx match open tags except XHTML self-contained tags\r\nI need to match all of these opening tags:\r\n\r\n<p>\r\n<a href=\"foo\">\r\nBut not self-closing tags:\r\n\r\n<br \/>\r\n<hr class=\"foo\" \/>\r\nI came up with this and wanted to make sure I've got it right. I am only capturing the a-z.\r\n\r\n<([a-z]+) *[^\/]*?>\r\nI believe it says:\r\n\r\nFind a less-than, then\r\nFind (and capture) a-z one or more times, then\r\nFind zero or more spaces, then\r\nFind any character zero or more times, greedy, except \/, then\r\nFind a greater-than\r\nDo I have that right? And more importantly, what do you think?"
   },
   {
     "url": "https://stackoverflow.com/questions/7346563/loading-local-json-file",
