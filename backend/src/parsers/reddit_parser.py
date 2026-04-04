@@ -37,7 +37,7 @@ async def parse_reddit_post(url: str) -> Dict[str, Any]:
         dati["html_text"] = result.html
         soup = BeautifulSoup(result.html, "html.parser")
 
-        # 1. Estrazione del Titolo (spesso dentro shreddit-title o h1)
+        # 1. Estrazione del Titolo
         tag_titolo = soup.find("h1") or soup.find("title")
         titolo_testo = tag_titolo.get_text(strip=True) if tag_titolo else ""
         
@@ -52,14 +52,9 @@ async def parse_reddit_post(url: str) -> Dict[str, Any]:
                        soup.find("div", {"data-test-id": "post-content"}) or \
                        soup.find("shreddit-post")
 
-        parsed_lines = []
-        
-        # 3. Aggiungiamo esplicitamente il titolo come prima riga del testo parsato
-        if titolo_testo:
-            parsed_lines.append(titolo_testo)
-
-        # 4. Elaborazione del contenuto principale
+        # 3 & 4. Elaborazione e unione del contenuto
         if main_content:
+            # Rimuoviamo gli elementi di UI "rumorosi" per non sporcare il markdown
             selectors_da_eliminare = [
                 "button", "faceplate-hovercard", "shreddit-post-flair", 
                 ".reward-button", "i", "svg", "aside"
@@ -67,24 +62,34 @@ async def parse_reddit_post(url: str) -> Dict[str, Any]:
             for noisy in main_content.select(", ".join(selectors_da_eliminare)):
                 noisy.decompose()
 
+            # Convertiamo in markdown preservando la formattazione nativa (grassetti, liste, etc.)
             testo_markdown = md(str(main_content), heading_style="ATX")
 
-            blacklist_keywords = ["share", "reply", "save", "comment", "award", "report", "vote"]
+            # Set di parole chiave da ignorare se appaiono DA SOLE su una riga
+            blacklist_keywords = {"share", "reply", "save", "comment", "award", "report", "vote"}
+            parsed_lines = []
             
             for line in testo_markdown.splitlines():
-                clean_line = line.strip()
-                # Il filtro len > 15 potrebbe tagliare frasi brevi legittime.
-                # Allentiamo il controllo: teniamo righe non vuote e non in blacklist
-                if clean_line: 
-                    low_line = clean_line.lower()
-                    if not any(word == low_line for word in blacklist_keywords):
-                        # Evitiamo di inserire stringhe composte solo da caratteri speciali residui
-                        if any(c.isalpha() for c in clean_line):
-                            parsed_lines.append(clean_line)
+                # Ignoriamo la riga solo se contiene ESATTAMENTE una parola in blacklist (scartando gli spazi)
+                if line.strip().lower() in blacklist_keywords:
+                    continue
+                
+                # Aggiungiamo la riga intatta, preservando l'indentazione e i marcatori Markdown
+                parsed_lines.append(line)
 
-            dati["parsed_text"] = "\n\n".join(parsed_lines).strip()
+            # Ricostruiamo il corpo del post unendo le righe. 
+            # Il \n singolo è sufficiente perché markdownify ha già spaziato i paragrafi.
+            corpo_pulito = "\n".join(parsed_lines).strip()
+            
+            # Uniamo il titolo (formattato come H1 Markdown) e il corpo pulito
+            if titolo_testo:
+                dati["parsed_text"] = f"# {titolo_testo}\n\n{corpo_pulito}"
+            else:
+                dati["parsed_text"] = corpo_pulito
+                
         else:
-            # Fallback
-            dati["parsed_text"] = titolo_testo + "\n\n" + result.markdown if titolo_testo else result.markdown
+            # Fallback: se non trova il div principale, usiamo il markdown generato automaticamente da crawl4ai
+            testo_fallback = result.markdown
+            dati["parsed_text"] = f"# {titolo_testo}\n\n{testo_fallback}" if titolo_testo else testo_fallback
 
         return dati
