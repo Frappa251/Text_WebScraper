@@ -34,7 +34,11 @@ def index(request: Request):
         print(f"Errore di connessione al backend: {e}")
 
     # Passa la lista di URL all'HTML tramite Jinja2
-    return templates.TemplateResponse("index.html", {"request": request, "gs_urls": gs_urls})
+    return templates.TemplateResponse(
+        request=request,
+        name="index.html",
+        context={"gs_urls": gs_urls}
+    )
 
 
 @app.post("/process", response_class=HTMLResponse)
@@ -47,15 +51,21 @@ def process_url(request: Request, url_libero: str = Form(""), url_tendina: str =
     target_url = url_tendina if url_tendina else url_libero
     
     if not target_url:
-        return templates.TemplateResponse("result.html", {"request": request, "error": "Nessun URL fornito."})
+        return templates.TemplateResponse(
+            request=request, 
+            name="result.html", 
+            context={"error": "Nessun URL fornito."}
+        )
 
     try:
         # 1. Chiede al backend di fare il parsing
         parse_res = requests.get(f"{BACKEND_URL}/parse", params={"url": target_url})
         if parse_res.status_code != 200:
-            return templates.TemplateResponse("result.html", {
-                "request": request, "error": f"Errore dal parser: {parse_res.text}"
-            })
+            return templates.TemplateResponse(
+                request=request, 
+                name="result.html", 
+                context={"error": f"Errore dal parser: {parse_res.text}"}
+            )
         
         parsed_data = parse_res.json()
         html_text = parsed_data.get("html_text", "")
@@ -78,18 +88,22 @@ def process_url(request: Request, url_libero: str = Form(""), url_tendina: str =
                 metrics = eval_res.json().get("token_level_eval", {})
 
         # Passa tutti i dati ottenuti al template dei risultati
-        return templates.TemplateResponse("result.html", {
-            "request": request,
-            "url": target_url,
-            "html_text": html_text,
-            "parsed_text": parsed_text,
-            "has_gs": has_gs,
-            "gold_text": gold_text,
-            "metrics": metrics
-        })
+        return templates.TemplateResponse(
+            request=request, 
+            name="result.html", 
+            context={
+                "url": target_url,
+                "html_text": html_text,
+                "parsed_text": parsed_text,
+                "has_gs": has_gs,
+                "gold_text": gold_text,
+                "metrics": metrics
+            }
+        )
 
     except requests.exceptions.ConnectionError:
-         return templates.TemplateResponse("result.html", {
-            "request": request, 
-            "error": "Il server di logica (backend) non risponde. Assicurati che sia acceso sulla porta 8003."
-        })
+        return templates.TemplateResponse(
+            request=request, 
+            name="result.html", 
+            context={"error": "Il server di logica (backend) non risponde. Assicurati che sia acceso sulla porta 8003."}
+        )
