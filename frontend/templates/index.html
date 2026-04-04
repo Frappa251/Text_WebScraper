@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <title>Minerva Web UI</title>
+</head>
+<body>
+    <h1>Minerva Parser</h1>
+    
+    <form action="/process" method="post">
+        
+        <!-- Campo per URL libero -->
+        <div>
+            <label for="url_libero">Inserisci un URL manualmente:</label><br>
+            <input type="text" id="url_libero" name="url_libero" size="60" placeholder="https://it.wikipedia.org/wiki/Esempio">
+        </div>
+
+        <p>OPPURE</p>
+
+        <!-- Menu a tendina generato da Jinja2 -->
+        <div>
+            <label for="url_tendina">Scegli un URL dal Gold Standard:</label><br>
+            <select id="url_tendina" name="url_tendina">
+                <option value="">-- Seleziona un URL salvato --</option>
+                {% for url in gs_urls %}
+                    <option value="{{ url }}">{{ url }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <br><br>
+        <button type="submit">Analizza Documento</button>
+        
+    </form>
+</body>
+</html>

@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <title>Risultati - Minerva</title>
+</head>
+<body>
+
+    <h2>Analisi per: <a href="{{ url }}" target="_blank">{{ url }}</a></h2>
+    <a href="/">⬅ Torna alla Ricerca</a>
+    <hr>
+
+    {% if error %}
+        <h3 style="color: red;">Errore di Elaborazione</h3>
+        <p>{{ error }}</p>
+    {% else %}
+
+        <!-- SEZIONE METRICHE (Mostrata solo se esiste il GS) -->
+        {% if has_gs %}
+            <h3>Valutazione rispetto al Gold Standard</h3>
+            <ul>
+                <li><strong>Precision:</strong> {{ metrics.precision }}</li>
+                <li><strong>Recall:</strong> {{ metrics.recall }}</li>
+                <li><strong>F1-Score:</strong> {{ metrics.f1 }}</li>
+            </ul>
+        {% else %}
+            <p><em>Attenzione: Questo URL non fa parte del Gold Standard. È stato mostrato solo l'output del parser.</em></p>
+        {% endif %}
+        <hr>
+
+        <!-- SEZIONE TESTI -->
+        <h3>Testo Estratto (Parser)</h3>
+        <pre>{{ parsed_text }}</pre>
+        <hr>
+
+        {% if has_gs %}
+            <h3>Testo Ideale (Gold Standard)</h3>
+            <pre>{{ gold_text }}</pre>
+            <hr>
+        {% endif %}
+
+        <h3>HTML Grezzo (Raw)</h3>
+        <!-- Limitiamo l'altezza dell'HTML grezzo per non avere una pagina infinita -->
+        <div style="height: 300px; overflow-y: scroll; border: 1px solid black; padding: 5px;">
+            <pre>{{ html_text }}</pre>
+        </div>
+
+    {% endif %}
+
+</body>
+</html>
