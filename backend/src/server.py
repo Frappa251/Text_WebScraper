@@ -28,7 +28,7 @@ def load_supported_domains() -> List[str]:
             return data.get("domains", [])
     except (FileNotFoundError, json.JSONDecodeError):
         # Fallback obbligatorio per evitare crash all'avvio
-        return ["www.reddit.com", "it.wikipedia.org", "en.wikipedia.org"]
+        return ["www.reddit.com", "stackoverflow.com", "en.wikipedia.org"]
 
 
 def load_gs_data(domain: str) -> list[dict]:
