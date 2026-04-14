@@ -19,7 +19,7 @@ async def parse_accuweather_post(url: str) -> Dict[str, Any]:
         "parsed_text": ""
     }
 
-    # Header essenziali: AccuWeather blocca spesso i bot se non c'è un User-Agent valido
+ 
     headers_custom = {
         "Accept-Language": "en-US,en;q=0.9",
         "Accept-Encoding": "gzip, deflate, br",
