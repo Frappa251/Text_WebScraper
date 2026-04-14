@@ -1,9 +1,12 @@
 import re
+import logging
 from urllib.parse import urlparse
 
 from bs4 import BeautifulSoup
 from markdownify import markdownify as md
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode
+
+logger = logging.getLogger(__name__)
 
 
 STOP_PHRASES = {
@@ -182,7 +185,7 @@ def extract_grammy_main_content(html: str, url: str) -> str:
     else:
         allowed_tags = ["p", "h2", "h3", "h4", "ul", "ol"]
 
-    elements = main.find_all(allowed_tags)
+    elements = main.find_all(allowed_tags) if main else []
 
     for elem in elements:
         text = elem.get_text(" ", strip=True)
@@ -214,30 +217,43 @@ def extract_grammy_main_content(html: str, url: str) -> str:
             parts.append(str(elem))
             continue
 
-    raw_md = md("\n".join(parts), heading_style="ATX")
-    return clean_grammy_markdown(raw_md)
+    raw_md = md("\n".join(parts), heading_style="ATX") if parts else ""
+    return clean_grammy_markdown(raw_md) if raw_md.strip() else ""
 
 
 async def parse_grammy_post(url: str) -> dict:
-    browser_cfg = BrowserConfig(headless=True)
-    run_cfg = CrawlerRunConfig(cache_mode=CacheMode.BYPASS)
+    try:
+        browser_cfg = BrowserConfig(headless=True)
+        run_cfg = CrawlerRunConfig(cache_mode=CacheMode.BYPASS)
 
-    async with AsyncWebCrawler(config=browser_cfg) as crawler:
-        result = await crawler.arun(url=url, config=run_cfg)
-        if not result.success:
-            return {}
+        async with AsyncWebCrawler(config=browser_cfg) as crawler:
+            result = await crawler.arun(url=url, config=run_cfg)
+            if not result.success:
+                logger.warning(f"Crawl failed for {url}: {result}")
+                return {}
 
-        html = result.html or ""
-        parsed_markdown = extract_grammy_main_content(html, url)
+            html = result.html or ""
+            if not html.strip():
+                logger.warning(f"Empty HTML for {url}")
+                return {}
+                
+            parsed_markdown = extract_grammy_main_content(html, url)
+            
+            # Assicura che parsed_markdown sia sempre una stringa, mai None
+            if parsed_markdown is None:
+                parsed_markdown = ""
 
-        soup = BeautifulSoup(html, "html.parser")
-        title_tag = soup.find("h1")
-        title = title_tag.get_text(strip=True) if title_tag else "GRAMMY Page"
+            soup = BeautifulSoup(html, "html.parser")
+            title_tag = soup.find("h1")
+            title = title_tag.get_text(strip=True) if title_tag else "GRAMMY Page"
 
-        return {
-            "url": url,
-            "domain": urlparse(url).netloc,
-            "title": title,
-            "html_text": html,
-            "parsed_text": parsed_markdown,
-        }
+            return {
+                "url": url,
+                "domain": urlparse(url).netloc,
+                "title": title,
+                "html_text": html,
+                "parsed_text": parsed_markdown,
+            }
+    except Exception as e:
+        logger.error(f"Error parsing Grammy URL {url}: {str(e)}", exc_info=True)
+        return {}
