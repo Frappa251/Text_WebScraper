@@ -1,31 +1,17 @@
 import re
 import logging
 from urllib.parse import urlparse
-
 from bs4 import BeautifulSoup
 from markdownify import markdownify as md
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode
 
 logger = logging.getLogger(__name__)
 
-
-STOP_PHRASES = {
-    "Read More",
-    "Subscribe to Newsletters",
-    "Join us on Social",
-}
-
-STOP_SECTION_PATTERNS = [
-    r"related",
-    r"read more",
-    r"more from",
-    r"latest news",
-    r"you may also like",
-]
-
-
 def clean_grammy_markdown(text: str) -> str:
-    text = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', text)
+    """
+    Pulisce il markdown finale da residui di formattazione 
+    e righe inutili isolate.
+    """
     text = text.replace("**", "").replace("__", "")
 
     cleaned_lines = []
@@ -34,6 +20,7 @@ def clean_grammy_markdown(text: str) -> str:
     for line in text.splitlines():
         stripped = line.strip()
 
+        # Salta le righe con parole singole inutili sfuggite al parser
         if stripped.lower() in {
             "facebook", "twitter", "email", "e-mail",
             "music news", "feature", "news"
@@ -49,41 +36,16 @@ def clean_grammy_markdown(text: str) -> str:
         cleaned_lines.append(stripped)
         prev_blank = False
 
+    # Assicura che ci siano al massimo doppi a capo
     text = "\n".join(cleaned_lines).strip()
-
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
 
-
-def is_probable_roundup(url: str, soup: BeautifulSoup, main) -> bool:
-    url_l = url.lower()
-    if "new-music-friday" in url_l:
-        return True
-
-    h2_h3_count = len(main.find_all(["h2", "h3"])) if main else 0
-    p_count = len(main.find_all("p")) if main else 0
-    list_count = len(main.find_all(["ul", "ol"])) if main else 0
-
-    return (h2_h3_count >= 4 and list_count >= 1) or (h2_h3_count >= 6 and p_count >= 6)
-
-
-def is_probable_awards_list(url: str, soup: BeautifulSoup, main) -> bool:
-    url_l = url.lower()
-    keywords = ["winners", "nominees", "see-the-full", "full-winners"]
-    if any(k in url_l for k in keywords):
-        return True
-
-    page_text = soup.get_text(" ", strip=True).lower()
-    return "nominees" in page_text and "winners" in page_text
-
-
 def find_grammy_main_content(soup: BeautifulSoup):
-    for selector in [
-        "article",
-        "main article",
-        "main",
-        "[role='main']",
-    ]:
+    """
+    Individua il contenitore principale dell'articolo.
+    """
+    for selector in ["article", "main article", "main", "[role='main']"]:
         node = soup.select_one(selector)
         if node:
             return node
@@ -91,9 +53,10 @@ def find_grammy_main_content(soup: BeautifulSoup):
     best = None
     best_score = -1
 
+    # Fallback euristico se mancano i tag semantici
     for node in soup.find_all(["div", "section"]):
-        p_count = len(node.find_all("p"))
-        h_count = len(node.find_all(["h2", "h3"]))
+        p_count = len(node.find_all("p", recursive=False))
+        h_count = len(node.find_all(["h2", "h3"], recursive=False))
         text_len = len(node.get_text(" ", strip=True))
 
         score = (p_count * 80) + (h_count * 30) + text_len
@@ -103,55 +66,62 @@ def find_grammy_main_content(soup: BeautifulSoup):
 
     return best
 
+def cut_off_infinite_scroll(main_node: BeautifulSoup) -> None:
+    """
+    Trova i divisori tipici di fine articolo e distrugge tutto il contenuto successivo,
+    prevenendo l'ingestione di articoli correlati o scroll infinito.
+    """
+    cutoff_phrases = [
+        "latest news & exclusive videos",
+        "explore the world of",
+        "read list",
+        "you may also like",
+        "latest news"
+    ]
+    
+    for tag in main_node.find_all(['h2', 'h3', 'div', 'section']):
+        text = tag.get_text(" ", strip=True).lower()
+        
+        if any(phrase in text for phrase in cutoff_phrases) or text == "read more":
+            # Trova l'elemento di blocco di alto livello sotto 'main'
+            # per tagliare il ramo corretto senza lasciare rimasugli
+            parent_under_main = tag
+            while parent_under_main.parent and parent_under_main.parent != main_node:
+                parent_under_main = parent_under_main.parent
+            
+            # Distruggi i fratelli successivi
+            for sibling in parent_under_main.find_next_siblings():
+                sibling.decompose()
+            
+            # Distruggi il blocco che contiene la frase di stop
+            parent_under_main.decompose()
+            break
 
 def remove_grammy_noise(main: BeautifulSoup) -> None:
-    for selector in [
-        "script",
-        "style",
-        "noscript",
-        "iframe",
-        "svg",
-        "form",
-        "button",
-        "nav",
-        "footer",
-        "aside",
-        "figure figcaption",  
-    ]:
+    """
+    Pulisce il contenitore principale da pubblicità, menu e popup.
+    """
+    # 1. Rimuove tag spazzatura di default
+    for selector in ["script", "style", "noscript", "iframe", "svg", "form", "button", "nav", "footer", "aside", "figure"]:
         for tag in main.select(selector):
             tag.decompose()
 
-    noisy_attr_keywords = [
-        "share",
-        "social",
-        "newsletter",
-        "subscribe",
-        "related",
-        "promo",
-        "advert",
-        "ad-",
-        "outbrain",
-        "taboola",
-        "breadcrumb",
-        "footer",
-        "header",
-        "nav",
-    ]
-
+    # 2. Rimuove blocchi basati su classi/ID che indicano pubblicità o social
+    noise_classes = ["newsletter", "share", "social", "promo", "advertisement", "related-articles"]
+    
     for tag in main.find_all(True):
-        attrs = " ".join(
-            str(v) for k, v in tag.attrs.items()
-            if k in {"class", "id", "role", "aria-label", "data-testid"}
-        ).lower()
+        classes = tag.get("class", [])
+        class_str = " ".join(classes).lower() if isinstance(classes, list) else str(classes).lower()
+        id_str = str(tag.get("id", "")).lower()
 
-        if any(k in attrs for k in noisy_attr_keywords):
+        if any(nc in class_str or nc in id_str for nc in noise_classes):
             tag.decompose()
             continue
 
-        text = tag.get_text(" ", strip=True)
-        if text in STOP_PHRASES:
+        # 3. Rimuove paragrafi che contengono ESATTAMENTE frasi di stop (evita falsi positivi)
+        text = tag.get_text(" ", strip=True).lower()
+        if text in ["subscribe to newsletters", "join us on social", "related"]:
             tag.decompose()
-
 
 def extract_grammy_main_content(html: str, url: str) -> str:
     soup = BeautifulSoup(html, "html.parser")
@@ -163,63 +133,21 @@ def extract_grammy_main_content(html: str, url: str) -> str:
     if main is None:
         return ""
 
+    # 1. Pulisce il contenitore dal rumore
     remove_grammy_noise(main)
+    
+    # 2. Amputa l'infinite scroll e le liste di "read more" alla fine
+    cut_off_infinite_scroll(main)
 
-    is_roundup = is_probable_roundup(url, soup, main)
-    is_awards = is_probable_awards_list(url, soup, main)
+    # 3. Genera Markdown intero (strip=['a', 'img'] pulisce nativamente link e foto)
+    raw_md = md(str(main), heading_style="ATX", strip=['a', 'img'])
+    
+    clean_md = clean_grammy_markdown(raw_md)
 
-    parts = [f"# {title}"] if title else []
-
-    if title_tag:
-        for sib in title_tag.find_next_siblings():
-            if sib.name in ["p", "div"]:
-                text = sib.get_text(" ", strip=True)
-                if text and len(text) > 40:
-                    parts.append(str(sib))
-                    break
-
-    if is_awards:
-        allowed_tags = ["p", "h2", "h3", "h4", "ul", "ol", "dl"]
-    elif is_roundup:
-        allowed_tags = ["p", "h2", "h3", "h4", "ul", "ol"]
-    else:
-        allowed_tags = ["p", "h2", "h3", "h4", "ul", "ol"]
-
-    elements = main.find_all(allowed_tags) if main else []
-
-    for elem in elements:
-        text = elem.get_text(" ", strip=True)
-        if not text:
-            continue
-
-        if any(re.search(pattern, text, re.IGNORECASE) for pattern in STOP_SECTION_PATTERNS):
-            break
-
-        if elem.name in ["h2", "h3", "h4"]:
-            parts.append(str(elem))
-            continue
-
-        if elem.name == "p":
-            min_len = 25 if is_roundup or is_awards else 40
-            if len(text) < min_len:
-                continue
-
-            lower = text.lower()
-            if lower in {"facebook", "twitter", "email", "e-mail"}:
-                continue
-            if "grammys/" in lower:
-                continue
-
-            parts.append(str(elem))
-            continue
-
-        if elem.name in ["ul", "ol", "dl"]:
-            parts.append(str(elem))
-            continue
-
-    raw_md = md("\n".join(parts), heading_style="ATX") if parts else ""
-    return clean_grammy_markdown(raw_md) if raw_md.strip() else ""
-
+    if title:
+        return f"# {title}\n\n{clean_md}"
+    
+    return clean_md
 
 async def parse_grammy_post(url: str) -> dict:
     try:
@@ -238,10 +166,7 @@ async def parse_grammy_post(url: str) -> dict:
                 return {}
                 
             parsed_markdown = extract_grammy_main_content(html, url)
-            
-            # Assicura che parsed_markdown sia sempre una stringa, mai None
-            if parsed_markdown is None:
-                parsed_markdown = ""
+            parsed_markdown = parsed_markdown if parsed_markdown else ""
 
             soup = BeautifulSoup(html, "html.parser")
             title_tag = soup.find("h1")
