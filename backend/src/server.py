@@ -22,9 +22,11 @@ async def root():
 
 def load_supported_domains() -> List[str]:
     """Legge la lista dei domini da domains.json nella root del progetto."""
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    file_path = os.path.join(current_dir, "..", "..", "domains.json")
+    
     try:
-        # Usiamo path relativi come richiesto dalle slide per Docker
-        with open("domains.json", "r", encoding="utf-8") as f:
+        with open(file_path, "r", encoding="utf-8") as f:
             data = json.load(f)
             return data.get("domains", [])
     except (FileNotFoundError, json.JSONDecodeError):
