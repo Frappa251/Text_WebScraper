@@ -43,39 +43,52 @@ async def parse_rockol_post(url: str) -> Dict[str, Any]:
         main_content = soup.find("article") or soup.find("div", class_="article-text")
         
         if main_content:
-            # 3. Pulizia Aggressiva (Cosa togliere per la Precision)
+            # 1. BARRIERA HTML: Pulizia più aggressiva
             selectors_da_eliminare = [
-                "img", "figure", "picture",      # Rimuoviamo le immagini (richiesta prof)
-                ".related-box", ".correlati",     # Articoli correlati
-                ".social-share", ".social-buttons",# Bottoni social
-                "script", "style", "iframe",      # Codice tecnico
-                ".adv", ".advertising", ".banner",# Pubblicità
-                ".tags-container", ".author-box"  # Tag e info autore (spesso non nel GS)
+                "img", "figure", "picture",      
+                ".related-box", ".correlati",     
+                ".social-share", ".social-buttons",
+                "script", "style", "iframe",      
+                ".adv", ".advertising", ".banner",
+                ".tags-container", ".author-box",
+                # NUOVI SELETTORI PER ROCKOL:
+                ".artist-menu", ".artist-nav", # Rimuove il menu Biografia/Articoli
+                ".breadcrumbs", "aside", ".sidebar", ".widget", # Rimuove colonne laterali
+                ".video-ros" # Rimuove il player video nascosto
             ]
             
             for selector in selectors_da_eliminare:
                 for element in main_content.select(selector):
                     element.decompose()
 
-            # 4. Trasformazione in Markdown
+            # Trasformazione in Markdown
             testo_markdown = md(str(main_content), heading_style="ATX")
             
-            # 5. Pulizia righe superflue
             parsed_lines = []
             if dati["title"]:
                 parsed_lines.append(f"# {dati['title']}")
                 
+            # 2. BARRIERA MARKDOWN: Filtraggio intelligente riga per riga
             for line in testo_markdown.splitlines():
                 clean_line = line.strip()
+                
+                # TRUCCO INFALLIBILE: Se inizia la sezione "Ultimissime", fermiamo la lettura dell'articolo!
+                if "Ultimissime" in clean_line and clean_line.startswith("#"):
+                    break
+                    
+                # Ignoriamo i residui del menu di navigazione superiore dell'artista
+                if "Torna all'homepage" in clean_line or "[Biografia]" in clean_line or "[Articoli]" in clean_line:
+                    continue
+                    
+                # Ignoriamo eventuali link orfani di immagini sfuggite alla pulizia HTML
+                if clean_line.startswith("](") and ".png" in clean_line:
+                    continue
+
                 # Teniamo solo righe che hanno sostanza testuale
                 if clean_line and any(c.isalpha() for c in clean_line):
-                    # Evitiamo di tenere link brevi di navigazione
                     if len(clean_line) > 10:
                         parsed_lines.append(clean_line)
 
             dati["parsed_text"] = "\n\n".join(parsed_lines).strip()
-        else:
-            # Fallback se non trova il tag <article>
-            dati["parsed_text"] = result.markdown
 
         return dati
