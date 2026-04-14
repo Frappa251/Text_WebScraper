@@ -26,10 +26,10 @@ def load_supported_domains() -> List[str]:
         # Usiamo path relativi come richiesto dalle slide per Docker
         with open("domains.json", "r", encoding="utf-8") as f:
             data = json.load(f)
-            return data.get("domains", [])
+            return data
     except (FileNotFoundError, json.JSONDecodeError):
         # Fallback obbligatorio per evitare crash all'avvio
-        return ["www.reddit.com", "stackoverflow.com", "en.wikipedia.org"]
+        return {"error": "File domains.json non trovato."}
 
 
 def load_gs_data(domain: str) -> list[dict]:
