@@ -7,9 +7,10 @@ from typing import List, Dict
 
 from src.models import ParsedDocument, DomainsResponse, GSEntry, FullGSResponse, EvalInput, EvalResponse, TokenLevelEval
 from src.evaluator import calcola_metriche_token
-from src.parsers.reddit_parser import parse_reddit_post
 from src.parsers.wikipedia_parser import parse_wikipedia_post
-from src.parsers.stackoverflow_parser import parse_stackoverflow_post
+from src.parsers.rockol_parser import parse_rockol_post
+from src.parsers.grammy_parser import parse_grammy_post
+from src.parsers.accuweather_parser import parse_accuweather_post
 
 app = FastAPI(title="Minerva Web Pipeline API - Sapienza")
 
@@ -84,12 +85,14 @@ async def parse_url(url: str = Query(..., description="L'URL da parsare")):
     
     try:
         # Selezione del parser in base al contenuto del dominio
-        if "reddit" in domain:
-            risultato = await parse_reddit_post(url)
-        elif "wikipedia" in domain:
+        if "wikipedia" in domain:
             risultato = await parse_wikipedia_post(url)
-        elif "stackoverflow" in domain:
-            risultato = await parse_stackoverflow_post(url)
+        elif "rockol" in domain:
+            risultato = await parse_rockol_post(url)
+        elif "grammy" in domain:
+            risultato = await parse_grammy_post(url)
+        elif "accuweather" in domain:
+            risultato = await parse_accuweather_post(url)
         else:
             raise HTTPException(status_code=400, detail="Parser non implementato per questo dominio")
             
@@ -157,12 +160,14 @@ async def get_full_gs_eval(domain: str = Query(...)):
     for entry in gs_list:
         try:
             # Parsing live dell'URL del GS
-            if "reddit" in domain:
-                parsed_data = await parse_reddit_post(entry["url"])
-            elif "wikipedia" in domain:
+            if "wikipedia" in domain:
                 parsed_data = await parse_wikipedia_post(entry["url"])
-            elif "stackoverflow" in domain:
-                parsed_data = await parse_stackoverflow_post(entry["url"])
+            elif "rockol" in domain:
+                parsed_data = await parse_rockol_post(entry["url"])
+            elif "grammy" in domain:
+                parsed_data = await parse_grammy_post(entry["url"])
+            elif "accuweather" in domain:
+                parsed_data = await parse_accuweather_post(entry["url"])
             else:
                 continue
                 
