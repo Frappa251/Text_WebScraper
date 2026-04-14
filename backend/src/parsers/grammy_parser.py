@@ -1,18 +1,73 @@
 import re
 import logging
 from urllib.parse import urlparse
-from bs4 import BeautifulSoup
+
+from bs4 import BeautifulSoup, Tag
 from markdownify import markdownify as md
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode
 
 logger = logging.getLogger(__name__)
 
+
+EXACT_NOISE_TEXT = {
+    "read more",
+    "subscribe to newsletters",
+    "join us on social",
+    "related",
+    "latest news",
+    "you may also like",
+    "facebook",
+    "twitter",
+    "email",
+    "e-mail",
+    "music news",
+    "feature",
+    "news",
+}
+
+STOP_TEXT_PATTERNS = [
+    r"^read more$",
+    r"^related$",
+    r"^latest news$",
+    r"^you may also like$",
+    r"^more from$",
+    r"^recommended$",
+]
+
+NOISE_TEXT_PATTERNS = [
+    r"^photo:\s*",
+    r"^graphic courtesy",
+    r"^all photos courtesy",
+    r"^follow .*",
+    r"^share this.*",
+    r"^advertisement$",
+    r"^sign up.*",
+    r".*newsletter.*",
+    r"^more from.*",
+    r"^related.*",
+    r"^latest news.*",
+]
+
+NOISY_CONTAINER_HINTS = [
+    "related",
+    "promo",
+    "card",
+    "teaser",
+    "recommended",
+    "share",
+    "social",
+    "newsletter",
+]
+
+
+def normalize_text(text: str) -> str:
+    return re.sub(r"\s+", " ", text or "").strip()
+
+
 def clean_grammy_markdown(text: str) -> str:
-    """
-    Pulisce il markdown finale da residui di formattazione 
-    e righe inutili isolate.
-    """
     text = text.replace("**", "").replace("__", "")
+    text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
+    text = re.sub(r"!\[[^\]]*\]\([^)]+\)", "", text)
 
     cleaned_lines = []
     prev_blank = False
@@ -20,11 +75,7 @@ def clean_grammy_markdown(text: str) -> str:
     for line in text.splitlines():
         stripped = line.strip()
 
-        # Salta le righe con parole singole inutili sfuggite al parser
-        if stripped.lower() in {
-            "facebook", "twitter", "email", "e-mail",
-            "music news", "feature", "news"
-        }:
+        if stripped.lower() in EXACT_NOISE_TEXT:
             continue
 
         if not stripped:
@@ -36,118 +87,241 @@ def clean_grammy_markdown(text: str) -> str:
         cleaned_lines.append(stripped)
         prev_blank = False
 
-    # Assicura che ci siano al massimo doppi a capo
     text = "\n".join(cleaned_lines).strip()
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
 
-def find_grammy_main_content(soup: BeautifulSoup):
-    """
-    Individua il contenitore principale dell'articolo.
-    """
-    for selector in ["article", "main article", "main", "[role='main']"]:
-        node = soup.select_one(selector)
-        if node:
-            return node
 
-    best = None
-    best_score = -1
+def normalize_attrs(tag: Tag) -> str:
+    values = []
 
-    # Fallback euristico se mancano i tag semantici
-    for node in soup.find_all(["div", "section"]):
-        p_count = len(node.find_all("p", recursive=False))
-        h_count = len(node.find_all(["h2", "h3"], recursive=False))
-        text_len = len(node.get_text(" ", strip=True))
+    classes = tag.get("class", [])
+    if isinstance(classes, list):
+        values.extend(str(c) for c in classes if c is not None)
+    elif classes:
+        values.append(str(classes))
 
-        score = (p_count * 80) + (h_count * 30) + text_len
-        if p_count >= 3 and score > best_score:
-            best = node
-            best_score = score
+    for attr in ["id", "role", "aria-label", "data-testid"]:
+        value = tag.get(attr)
+        if value is not None:
+            values.append(str(value))
 
-    return best
+    return " ".join(values).lower()
 
-def cut_off_infinite_scroll(main_node: BeautifulSoup) -> None:
-    """
-    Trova i divisori tipici di fine articolo e distrugge tutto il contenuto successivo,
-    prevenendo l'ingestione di articoli correlati o scroll infinito.
-    """
-    cutoff_phrases = [
-        "latest news & exclusive videos",
-        "explore the world of",
-        "read list",
-        "you may also like",
-        "latest news"
+
+def is_noise_text(text: str) -> bool:
+    t = normalize_text(text).lower()
+    if not t:
+        return True
+
+    if t in EXACT_NOISE_TEXT:
+        return True
+
+    return any(re.search(p, t, re.IGNORECASE) for p in NOISE_TEXT_PATTERNS)
+
+
+def is_stop_text(text: str) -> bool:
+    t = normalize_text(text).lower()
+    return any(re.search(p, t, re.IGNORECASE) for p in STOP_TEXT_PATTERNS)
+
+
+def looks_like_new_article_title(text: str) -> bool:
+    t = normalize_text(text)
+    lower = t.lower()
+
+    if len(t) < 20 or len(t) > 160:
+        return False
+
+    if t.endswith("."):
+        return False
+
+    # titolo di altro articolo: tipicamente con pipe
+    if "|" in t:
+        return True
+
+    # formule da card/promozione/editorial link
+    promo_patterns = [
+        r"^watch ",
+        r"^listen to ",
+        r"^see the full ",
+        r"^read: ",
+        r"^exclusive: ",
     ]
-    
-    for tag in main_node.find_all(['h2', 'h3', 'div', 'section']):
-        text = tag.get_text(" ", strip=True).lower()
-        
-        if any(phrase in text for phrase in cutoff_phrases) or text == "read more":
-            # Trova l'elemento di blocco di alto livello sotto 'main'
-            # per tagliare il ramo corretto senza lasciare rimasugli
-            parent_under_main = tag
-            while parent_under_main.parent and parent_under_main.parent != main_node:
-                parent_under_main = parent_under_main.parent
-            
-            # Distruggi i fratelli successivi
-            for sibling in parent_under_main.find_next_siblings():
-                sibling.decompose()
-            
-            # Distruggi il blocco che contiene la frase di stop
-            parent_under_main.decompose()
-            break
+    if any(re.search(p, lower, re.IGNORECASE) for p in promo_patterns):
+        return True
 
-def remove_grammy_noise(main: BeautifulSoup) -> None:
-    """
-    Pulisce il contenitore principale da pubblicità, menu e popup.
-    """
-    # 1. Rimuove tag spazzatura di default
-    for selector in ["script", "style", "noscript", "iframe", "svg", "form", "button", "nav", "footer", "aside", "figure"]:
-        for tag in main.select(selector):
+    return False
+
+
+def is_probable_teaser(tag: Tag, text: str) -> bool:
+    attrs = normalize_attrs(tag)
+    if any(hint in attrs for hint in NOISY_CONTAINER_HINTS):
+        return True
+
+    link_count = len(tag.find_all("a"))
+    text_len = len(text)
+
+    if link_count >= 3 and text_len < 180:
+        return True
+
+    if tag.name == "p" and text_len < 120 and looks_like_new_article_title(text):
+        return True
+
+    return False
+
+
+def remove_global_noise(soup: BeautifulSoup) -> None:
+    for selector in [
+        "script", "style", "noscript", "iframe", "svg", "form",
+        "button", "nav", "footer", "aside"
+    ]:
+        for tag in soup.select(selector):
             tag.decompose()
 
-    # 2. Rimuove blocchi basati su classi/ID che indicano pubblicità o social
-    noise_classes = ["newsletter", "share", "social", "promo", "advertisement", "related-articles"]
-    
-    for tag in main.find_all(True):
-        classes = tag.get("class", [])
-        class_str = " ".join(classes).lower() if isinstance(classes, list) else str(classes).lower()
-        id_str = str(tag.get("id", "")).lower()
 
-        if any(nc in class_str or nc in id_str for nc in noise_classes):
-            tag.decompose()
+def find_title_tag(soup: BeautifulSoup) -> Tag | None:
+    return soup.find("h1")
+
+
+def extract_following_blocks_from_title(title_tag: Tag, is_roundup: bool = False) -> list[str]:
+    parts = []
+    seen_html = set()
+    started = False
+    valid_p_count = 0
+    bad_streak = 0
+
+    title_text = normalize_text(title_tag.get_text(" ", strip=True))
+
+    for elem in title_tag.next_elements:
+        if not isinstance(elem, Tag):
             continue
 
-        # 3. Rimuove paragrafi che contengono ESATTAMENTE frasi di stop (evita falsi positivi)
-        text = tag.get_text(" ", strip=True).lower()
-        if text in ["subscribe to newsletters", "join us on social", "related"]:
-            tag.decompose()
+        if elem is title_tag:
+            continue
+
+        if elem.name not in {"p", "h2", "h3", "h4", "li"}:
+            continue
+
+        text = normalize_text(elem.get_text(" ", strip=True))
+        if not text:
+            continue
+
+        if text == title_text:
+            continue
+
+        if not is_roundup and started and valid_p_count >= 3 and looks_like_new_article_title(text):
+            break
+
+        if is_stop_text(text):
+            break
+
+        if is_noise_text(text):
+            bad_streak += 1
+            if started and bad_streak >= 2:
+                break
+            continue
+
+        if elem.name in {"h2", "h3", "h4"}:
+            if len(text) >= 8:
+                norm_html = re.sub(r"\s+", " ", str(elem).strip())
+                if norm_html not in seen_html:
+                    parts.append(str(elem))
+                    seen_html.add(norm_html)
+                    started = True
+                    bad_streak = 0
+            continue
+
+        if elem.name == "li":
+            if len(text) < 8:
+                bad_streak += 1
+                if started and bad_streak >= 2:
+                    break
+                continue
+
+            norm_html = re.sub(r"\s+", " ", str(elem).strip())
+            if norm_html not in seen_html:
+                parts.append(str(elem))
+                seen_html.add(norm_html)
+                started = True
+                bad_streak = 0
+            continue
+
+        if elem.name == "p":
+            min_len = 25 if is_roundup else 30
+
+            if len(text) < min_len:
+                bad_streak += 1
+                if started and bad_streak >= 2:
+                    break
+                continue
+
+            if is_probable_teaser(elem, text):
+                bad_streak += 1
+                if started and bad_streak >= 2:
+                    break
+                continue
+
+            norm_html = re.sub(r"\s+", " ", str(elem).strip())
+            if norm_html not in seen_html:
+                parts.append(str(elem))
+                seen_html.add(norm_html)
+                started = True
+                bad_streak = 0
+                valid_p_count += 1
+
+    return parts
+
+
+def deduplicate_by_text(html_parts: list[str]) -> list[str]:
+    seen_texts = set()
+    result = []
+
+    for part in html_parts:
+        soup = BeautifulSoup(part, "html.parser")
+        text = normalize_text(soup.get_text(" ", strip=True))
+        if text in seen_texts:
+            continue
+        seen_texts.add(text)
+        result.append(part)
+
+    return result
+
+
+def is_roundup_article(url: str, title: str) -> bool:
+    url_l = url.lower()
+    title_l = title.lower()
+
+    roundup_hints = [
+        "new music friday",
+        "listen to songs",
+        "albums from",
+        "songs & albums from",
+        "best new songs",
+        "best new albums",
+    ]
+
+    return any(h in url_l for h in roundup_hints) or any(h in title_l for h in roundup_hints)
+
 
 def extract_grammy_main_content(html: str, url: str) -> str:
     soup = BeautifulSoup(html, "html.parser")
+    remove_global_noise(soup)
 
-    title_tag = soup.find("h1")
-    title = title_tag.get_text(strip=True) if title_tag else ""
-
-    main = find_grammy_main_content(soup)
-    if main is None:
+    title_tag = find_title_tag(soup)
+    if title_tag is None:
         return ""
 
-    # 1. Pulisce il contenitore dal rumore
-    remove_grammy_noise(main)
-    
-    # 2. Amputa l'infinite scroll e le liste di "read more" alla fine
-    cut_off_infinite_scroll(main)
+    title = normalize_text(title_tag.get_text(" ", strip=True))
+    roundup = is_roundup_article(url, title)
 
-    # 3. Genera Markdown intero (strip=['a', 'img'] pulisce nativamente link e foto)
-    raw_md = md(str(main), heading_style="ATX", strip=['a', 'img'])
-    
-    clean_md = clean_grammy_markdown(raw_md)
+    parts = [f"# {title}"] if title else []
 
-    if title:
-        return f"# {title}\n\n{clean_md}"
-    
-    return clean_md
+    body_parts = extract_following_blocks_from_title(title_tag, is_roundup=roundup)
+    body_parts = deduplicate_by_text(body_parts)
+    parts.extend(body_parts)
+
+    raw_md = md("\n".join(parts), heading_style="ATX", strip=["a", "img"]) if parts else ""
+    return clean_grammy_markdown(raw_md)
 
 async def parse_grammy_post(url: str) -> dict:
     try:
@@ -164,13 +338,12 @@ async def parse_grammy_post(url: str) -> dict:
             if not html.strip():
                 logger.warning(f"Empty HTML for {url}")
                 return {}
-                
-            parsed_markdown = extract_grammy_main_content(html, url)
-            parsed_markdown = parsed_markdown if parsed_markdown else ""
+
+            parsed_markdown = extract_grammy_main_content(html, url) or ""
 
             soup = BeautifulSoup(html, "html.parser")
             title_tag = soup.find("h1")
-            title = title_tag.get_text(strip=True) if title_tag else "GRAMMY Page"
+            title = normalize_text(title_tag.get_text(" ", strip=True)) if title_tag else "GRAMMY Page"
 
             return {
                 "url": url,
@@ -179,6 +352,7 @@ async def parse_grammy_post(url: str) -> dict:
                 "html_text": html,
                 "parsed_text": parsed_markdown,
             }
+
     except Exception as e:
         logger.error(f"Error parsing Grammy URL {url}: {str(e)}", exc_info=True)
         return {}
