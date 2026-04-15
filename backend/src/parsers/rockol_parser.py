@@ -19,7 +19,7 @@ async def parse_rockol_post(url: str) -> Dict[str, Any]:
         "parsed_text": ""
     }
 
-    # Configurazione Browser (forziamo l'italiano visto il dominio)
+    # Configurazione Browser
     headers_it = {
         "Accept-Language": "it-IT,it;q=0.9",
     }
@@ -34,16 +34,14 @@ async def parse_rockol_post(url: str) -> Dict[str, Any]:
         dati["html_text"] = result.html
         soup = BeautifulSoup(result.html, "html.parser")
 
-        # 1. Estrazione del Titolo (Rockol usa h1 per le news)
+        # 1. Estrazione del Titolo
         tag_titolo = soup.find("h1")
         dati["title"] = tag_titolo.get_text(strip=True) if tag_titolo else "Titolo non trovato"
 
         # 2. Identificazione del contenuto principale
-        # Solitamente Rockol racchiude l'articolo in tag <article> o div specifici
         main_content = soup.find("article") or soup.find("div", class_="article-text")
         
         if main_content:
-            # 1. BARRIERA HTML: Pulizia più aggressiva
             selectors_da_eliminare = [
                 "img", "figure", "picture",      
                 ".related-box", ".correlati",     
@@ -51,10 +49,9 @@ async def parse_rockol_post(url: str) -> Dict[str, Any]:
                 "script", "style", "iframe",      
                 ".adv", ".advertising", ".banner",
                 ".tags-container", ".author-box",
-                # NUOVI SELETTORI PER ROCKOL:
-                ".artist-menu", ".artist-nav", # Rimuove il menu Biografia/Articoli
-                ".breadcrumbs", "aside", ".sidebar", ".widget", # Rimuove colonne laterali
-                ".video-ros" # Rimuove il player video nascosto
+                ".artist-menu", ".artist-nav",
+                ".breadcrumbs", "aside", ".sidebar", ".widget",
+                ".video-ros"
             ]
             
             for selector in selectors_da_eliminare:
@@ -68,23 +65,19 @@ async def parse_rockol_post(url: str) -> Dict[str, Any]:
             if dati["title"]:
                 parsed_lines.append(f"# {dati['title']}")
                 
-            # 2. BARRIERA MARKDOWN: Filtraggio intelligente riga per riga
             for line in testo_markdown.splitlines():
                 clean_line = line.strip()
                 
-                # TRUCCO INFALLIBILE: Se inizia la sezione "Ultimissime", fermiamo la lettura dell'articolo!
                 if "Ultimissime" in clean_line and clean_line.startswith("#"):
                     break
                     
-                # Ignoriamo i residui del menu di navigazione superiore dell'artista
                 if "Torna all'homepage" in clean_line or "[Biografia]" in clean_line or "[Articoli]" in clean_line:
                     continue
                     
-                # Ignoriamo eventuali link orfani di immagini sfuggite alla pulizia HTML
                 if clean_line.startswith("](") and ".png" in clean_line:
                     continue
 
-                # Teniamo solo righe che hanno sostanza testuale
+                # Teniamo solo righe valide
                 if clean_line and any(c.isalpha() for c in clean_line):
                     if len(clean_line) > 10:
                         parsed_lines.append(clean_line)
