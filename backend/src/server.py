@@ -5,12 +5,12 @@ from fastapi.responses import RedirectResponse
 from urllib.parse import urlparse
 from typing import List, Dict
 
-from src.models import ParsedDocument, DomainsResponse, GSEntry, FullGSResponse, EvalInput, EvalResponse, TokenLevelEval
-from src.evaluator import calcola_metriche_token, calcola_jaccard, valuta_testo
-from src.parsers.wikipedia_parser import parse_wikipedia_post
-from src.parsers.rockol_parser import parse_rockol_post
-from src.parsers.grammy_parser import parse_grammy_post
-from src.parsers.accuweather_parser import parse_accuweather_post
+from .models import ParsedDocument, DomainsResponse, GSEntry, FullGSResponse, EvalInput, EvalResponse, TokenLevelEval
+from .evaluator import calcola_metriche_token, calcola_jaccard, valuta_testo
+from .parsers.wikipedia_parser import parse_wikipedia_post
+from .parsers.rockol_parser import parse_rockol_post
+from .parsers.grammy_parser import parse_grammy_post
+from .parsers.accuweather_parser import parse_accuweather_post
 
 app = FastAPI(title="Minerva Web Pipeline API - Sapienza")
 
@@ -22,31 +22,31 @@ async def root():
 
 def load_supported_domains() -> List[str]:
     """Legge la lista dei domini da domains.json usando un path relativo."""
-    # Path puramente relativo: punta al file nella stessa cartella di esecuzione (root /app)
-    file_path = "domains.json" 
+    # Trova la directory in cui si trova QUESTO file (server.py)
+    current_dir = os.path.dirname(__file__)
+    # Risale di due livelli per arrivare alla root del progetto e punta al file
+    file_path = os.path.join(current_dir, "..", "..", "domains.json")
     
     try:
         with open(file_path, "r", encoding="utf-8") as f:
             data = json.load(f)
             return data.get("domains", [])
     except (FileNotFoundError, json.JSONDecodeError):
-        print("ATTENZIONE: File domains.json non trovato o malformato.")
+        print(f"ATTENZIONE: File non trovato in {os.path.abspath(file_path)}")
         return []
-
 
 def load_gs_data(domain: str) -> list[dict]:
     """Legge il file GS usando un path puramente relativo."""
-    # Estrae il nome base (es. 'wikipedia' da 'en.wikipedia.org')
     parts = domain.replace("www.", "").split(".")
     nome_base = parts[1] if len(parts) > 2 else parts[0]
     
-    # Path puramente relativo verso la cartella gs_data
-    file_path = f"gs_data/{nome_base}_gs.json"
+    current_dir = os.path.dirname(__file__)
+    file_path = os.path.join(current_dir, "..", "..", "gs_data", f"{nome_base}_gs.json")
     
     print(f"DEBUG: Cerco il file GS in: {file_path}")
 
     if not os.path.exists(file_path):
-        print(f"DEBUG: File NON trovato!")
+        print(f"DEBUG: File NON trovato in {os.path.abspath(file_path)}!")
         return []
         
     try:
