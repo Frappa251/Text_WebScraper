@@ -1,4 +1,5 @@
 import requests
+import os
 from fastapi import FastAPI, Request, Form
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
@@ -9,7 +10,7 @@ app = FastAPI(title="Minerva Web UI")
 templates = Jinja2Templates(directory="templates")
 
 # Indirizzo del tuo backend (il server di logica)
-BACKEND_URL = "http://127.0.0.1:8003"
+BACKEND_URL = os.getenv("BACKEND_URL", "http://127.0.0.1:8003")
 
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request):
