@@ -5,12 +5,12 @@ from fastapi.responses import RedirectResponse
 from urllib.parse import urlparse
 from typing import List, Dict
 
-from src.models import ParsedDocument, DomainsResponse, GSEntry, FullGSResponse, EvalInput, EvalResponse, TokenLevelEval
-from src.evaluator import calcola_metriche_token
-from src.parsers.wikipedia_parser import parse_wikipedia_post
-from src.parsers.rockol_parser import parse_rockol_post
-from src.parsers.grammy_parser import parse_grammy_post
-from src.parsers.accuweather_parser import parse_accuweather_post
+from .models import ParsedDocument, DomainsResponse, GSEntry, FullGSResponse, EvalInput, EvalResponse, TokenLevelEval
+from .evaluator import calcola_metriche_token, calcola_jaccard, valuta_testo
+from .parsers.wikipedia_parser import parse_wikipedia_post
+from .parsers.rockol_parser import parse_rockol_post
+from .parsers.grammy_parser import parse_grammy_post
+from .parsers.accuweather_parser import parse_accuweather_post
 
 app = FastAPI(title="Minerva Web Pipeline API - Sapienza")
 
@@ -21,8 +21,10 @@ async def root():
 
 
 def load_supported_domains() -> List[str]:
-    """Legge la lista dei domini da domains.json nella root del progetto."""
-    current_dir = os.path.dirname(os.path.abspath(__file__))
+    """Legge la lista dei domini da domains.json usando un path relativo."""
+    # Trova la directory in cui si trova QUESTO file (server.py)
+    current_dir = os.path.dirname(__file__)
+    # Risale di due livelli per arrivare alla root del progetto e punta al file
     file_path = os.path.join(current_dir, "..", "..", "domains.json")
     
     try:
@@ -30,33 +32,21 @@ def load_supported_domains() -> List[str]:
             data = json.load(f)
             return data.get("domains", [])
     except (FileNotFoundError, json.JSONDecodeError):
-        # Fallback obbligatorio per evitare crash all'avvio
-        # MAI restituire un dizionario
-        print("ATTENZIONE: File domains.json non trovato o malformato.")
+        print(f"ATTENZIONE: File non trovato in {os.path.abspath(file_path)}")
         return []
 
-
 def load_gs_data(domain: str) -> list[dict]:
-    """Legge il file GS usando percorsi relativi alla posizione dello script."""
-    # 1. Identifica la cartella dove si trova server.py (backend/src/)
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    
-    # 2. Risale di due livelli per arrivare alla ROOT del progetto
-    # Da backend/src/ -> backend/ -> ROOT/
-    root_dir = os.path.abspath(os.path.join(current_dir, "..", ".."))
-    
-    # 3. Estrae il nome base (es. 'wikipedia' da 'en.wikipedia.org')
+    """Legge il file GS usando un path puramente relativo."""
     parts = domain.replace("www.", "").split(".")
     nome_base = parts[1] if len(parts) > 2 else parts[0]
     
-    # 4. Costruisce il percorso verso gs_data
-    file_path = os.path.join(root_dir, "gs_data", f"{nome_base}_gs.json")
+    current_dir = os.path.dirname(__file__)
+    file_path = os.path.join(current_dir, "..", "..", "gs_data", f"{nome_base}_gs.json")
     
-    # DEBUG: Stampa il percorso nel terminale così vedi se è giusto
     print(f"DEBUG: Cerco il file GS in: {file_path}")
 
     if not os.path.exists(file_path):
-        print(f"DEBUG: File NON trovato!")
+        print(f"DEBUG: File NON trovato in {os.path.abspath(file_path)}!")
         return []
         
     try:
@@ -142,10 +132,56 @@ async def get_full_gold_standard(domain: str = Query(...)):
 @app.post("/evaluate", response_model=EvalResponse)
 async def evaluate_parsing(data: EvalInput):
     """Calcola metriche tra testo parsato e gold standard."""
-    metriche = calcola_metriche_token(data.parsed_text, data.gold_text)
+    result = valuta_testo(data.parsed_text, data.gold_text)
     return EvalResponse(
-        token_level_eval=TokenLevelEval(**metriche),
-        x_eval={}
+        token_level_eval=TokenLevelEval(**result["token_level_eval"]),
+        x_eval=result["x_eval"]
+    )
+
+
+@app.get("/evaluate_url", response_model=EvalResponse)
+async def evaluate_url(url: str = Query(..., description="L'URL da valutare confrontando il parsing con il GS")):
+    """Valuta una URL parsando il contenuto e confrontandolo con il Gold Standard."""
+    domain = urlparse(url).netloc
+    if domain not in load_supported_domains():
+        raise HTTPException(status_code=400, detail="Dominio non supportato")
+    
+    # Ottieni il GS per l'URL
+    gs_list = load_gs_data(domain)
+    gold_entry = None
+    for entry in gs_list:
+        if entry.get("url") == url:
+            gold_entry = entry
+            break
+    if not gold_entry:
+        raise HTTPException(status_code=404, detail="L'URL non è nel Gold Standard")
+    
+    # Parsea l'URL
+    try:
+        if "wikipedia" in domain:
+            parsed_data = await parse_wikipedia_post(url)
+        elif "rockol" in domain:
+            parsed_data = await parse_rockol_post(url)
+        elif "grammy" in domain:
+            parsed_data = await parse_grammy_post(url)
+        elif "accuweather" in domain:
+            parsed_data = await parse_accuweather_post(url)
+        else:
+            raise HTTPException(status_code=400, detail="Parser non implementato per questo dominio")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Errore durante il parsing: {str(e)}")
+    
+    if not parsed_data or not parsed_data.get("parsed_text"):
+        raise HTTPException(status_code=404, detail="Parsing fallito o contenuto vuoto")
+    
+    # Calcola le metriche
+    parsed_text = parsed_data["parsed_text"]
+    gold_text = gold_entry["gold_text"]
+    result = valuta_testo(parsed_text, gold_text)
+    
+    return EvalResponse(
+        token_level_eval=TokenLevelEval(**result["token_level_eval"]),
+        x_eval=result["x_eval"]
     )
 
 
@@ -159,7 +195,7 @@ async def get_full_gs_eval(domain: str = Query(...)):
     if not gs_list:
         raise HTTPException(status_code=404, detail="Nessun dato nel GS per questo dominio")
         
-    p, r, f1 = [], [], []
+    p, r, f1, jaccard_list = [], [], [], []
     
     for entry in gs_list:
         try:
@@ -176,15 +212,21 @@ async def get_full_gs_eval(domain: str = Query(...)):
                 continue
                 
             # Calcolo metriche sul singolo documento
-            m = calcola_metriche_token(parsed_data.get("parsed_text", ""), entry["gold_text"])
+            parsed_text = parsed_data.get("parsed_text", "")
+            gold_text = entry["gold_text"]
+            result = valuta_testo(parsed_text, gold_text)
+            m = result["token_level_eval"]
+            j = result["x_eval"]["jaccard_similarity"]
             p.append(m["precision"])
             r.append(m["recall"])
             f1.append(m["f1"])
+            jaccard_list.append(j)
         except Exception:
             # Se un documento fallisce, contribuisce con 0 alla media
             p.append(0.0)
             r.append(0.0)
             f1.append(0.0)
+            jaccard_list.append(0.0)
             
     # Calcolo medie
     n = len(gs_list)
@@ -194,5 +236,5 @@ async def get_full_gs_eval(domain: str = Query(...)):
             recall=round(sum(r)/n, 4),
             f1=round(sum(f1)/n, 4)
         ),
-        x_eval={}
+        x_eval={"jaccard_similarity": round(sum(jaccard_list)/n, 4)}
     )
