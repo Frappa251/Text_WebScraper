@@ -21,38 +21,28 @@ async def root():
 
 
 def load_supported_domains() -> List[str]:
-    """Legge la lista dei domini da domains.json nella root del progetto."""
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    file_path = os.path.join(current_dir, "..", "..", "domains.json")
+    """Legge la lista dei domini da domains.json usando un path relativo."""
+    # Path puramente relativo: punta al file nella stessa cartella di esecuzione (root /app)
+    file_path = "domains.json" 
     
     try:
         with open(file_path, "r", encoding="utf-8") as f:
             data = json.load(f)
             return data.get("domains", [])
     except (FileNotFoundError, json.JSONDecodeError):
-        # Fallback obbligatorio per evitare crash all'avvio
-        # MAI restituire un dizionario
         print("ATTENZIONE: File domains.json non trovato o malformato.")
         return []
 
 
 def load_gs_data(domain: str) -> list[dict]:
-    """Legge il file GS usando percorsi relativi alla posizione dello script."""
-    # 1. Identifica la cartella dove si trova server.py (backend/src/)
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    
-    # 2. Risale di due livelli per arrivare alla ROOT del progetto
-    # Da backend/src/ -> backend/ -> ROOT/
-    root_dir = os.path.abspath(os.path.join(current_dir, "..", ".."))
-    
-    # 3. Estrae il nome base (es. 'wikipedia' da 'en.wikipedia.org')
+    """Legge il file GS usando un path puramente relativo."""
+    # Estrae il nome base (es. 'wikipedia' da 'en.wikipedia.org')
     parts = domain.replace("www.", "").split(".")
     nome_base = parts[1] if len(parts) > 2 else parts[0]
     
-    # 4. Costruisce il percorso verso gs_data
-    file_path = os.path.join(root_dir, "gs_data", f"{nome_base}_gs.json")
+    # Path puramente relativo verso la cartella gs_data
+    file_path = f"gs_data/{nome_base}_gs.json"
     
-    # DEBUG: Stampa il percorso nel terminale così vedi se è giusto
     print(f"DEBUG: Cerco il file GS in: {file_path}")
 
     if not os.path.exists(file_path):
