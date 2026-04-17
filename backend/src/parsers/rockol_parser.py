@@ -1,4 +1,5 @@
 import asyncio
+import re
 from urllib.parse import urlparse
 from typing import Dict, Any
 from bs4 import BeautifulSoup
@@ -44,20 +45,23 @@ async def parse_rockol_post(url: str) -> Dict[str, Any]:
             soup.find("div", class_="article-body") or   # Layout intermedi
             soup.find("div", class_="testo-articolo") or # Vecchi layout
             soup.find("article") or                      # Layout moderni generali
-            soup.find("div", class_="article-text")      # Fallback finale
+            soup.find("div", class_="article-text") or
+            soup.find("div", class_="main-content") or   # Fallback per siti vecchissimi
+            soup.find("div", id="content") or
+            soup.body
         )
         
         if main_content:
             selectors_da_eliminare = [
                 "img", "figure", "picture",      
-                ".related-box", ".correlati",     
+                ".related-box", ".correlati", ".related", # Aggiunto .related
                 ".social-share", ".social-buttons",
                 "script", "style", "iframe",      
                 ".adv", ".advertising", ".banner",
                 ".tags-container", 
-                # Rimosso .author-box, aside, .sidebar e .widget che tagliavano le interviste
                 ".artist-menu", ".artist-nav", 
-                ".breadcrumbs", ".video-ros"
+                ".breadcrumbs", ".video-ros",
+                "header", "footer"
             ]
             
             for selector in selectors_da_eliminare:
@@ -75,18 +79,33 @@ async def parse_rockol_post(url: str) -> Dict[str, Any]:
                 clean_line = line.strip()
                 
                 # Barriera per il footer
-                if "Ultimissime" in clean_line and clean_line.startswith("#"):
+                if ("Ultimissime" in clean_line and clean_line.startswith("#")) or clean_line.startswith("Schede:"):
                     break
                     
-                if "Torna all'homepage" in clean_line or "[Biografia]" in clean_line or "[Articoli]" in clean_line:
+                if clean_line.startswith("[Notizie]") or "Torna all'homepage" in clean_line or "[Biografia]" in clean_line or "[Articoli]" in clean_line:
                     continue
-                    
-                if clean_line.startswith("](") and ".png" in clean_line:
+                
+                # Pulizia link orfani o formattati male (es. "](...)")
+                if "©" in clean_line or "Riproduzione riservata" in clean_line or clean_line.startswith("La fotografia dell'articolo"):
                     continue
 
                 # Teniamo solo righe valide
+                if clean_line.startswith("Di ") and "[" in clean_line:
+                    match = re.search(r'\[(.*?)\]', clean_line)
+                    if match:
+                        clean_line = f"*Di {match.group(1)}*"
+
+                # 5. RIMOZIONE LINK ORFANI
+                if clean_line.startswith("](") or clean_line.endswith("]("):
+                    continue
+
+                # 6. SALVATAGGIO DELLE RIGHE VALIDE
                 if clean_line and any(c.isalpha() for c in clean_line):
-                    if len(clean_line) > 5: # Abbassato da 10 a 5 per non perdere risposte brevi
+                    # Pialla via i link vuoti invisibili
+                    clean_line = re.sub(r'\[\s*\]\([^)]+\)', '', clean_line).strip()
+                    
+                    # Evita di saltare il titolo "A" o cose simili (abbassiamo il limite)
+                    if len(clean_line) > 2: 
                         parsed_lines.append(clean_line)
 
             dati["parsed_text"] = "\n\n".join(parsed_lines).strip()
