@@ -1,14 +1,16 @@
+import json
+import os
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import RedirectResponse
 from urllib.parse import urlparse
 from typing import List, Dict
-import json
-import os
 
 from src.models import ParsedDocument, DomainsResponse, GSEntry, FullGSResponse, EvalInput, EvalResponse, TokenLevelEval
 from src.evaluator import calcola_metriche_token
-from src.parsers.reddit_parser import parse_reddit_post
 from src.parsers.wikipedia_parser import parse_wikipedia_post
+from src.parsers.rockol_parser import parse_rockol_post
+from src.parsers.grammy_parser import parse_grammy_post
+from src.parsers.accuweather_parser import parse_accuweather_post
 
 app = FastAPI(title="Minerva Web Pipeline API - Sapienza")
 
@@ -17,22 +19,25 @@ async def root():
     """Reindirizza automaticamente alla documentazione per evitare l'errore 404."""
     return RedirectResponse(url="/docs")
 
+
 def load_supported_domains() -> List[str]:
-    """
-    Legge la lista dei domini da domains.json nella root del progetto.
-    """
+    """Legge la lista dei domini da domains.json nella root del progetto."""
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    file_path = os.path.join(current_dir, "..", "..", "domains.json")
+    
     try:
-        # Usiamo path relativi come richiesto dalle slide per Docker
-        with open("domains.json", "r", encoding="utf-8") as f:
+        with open(file_path, "r", encoding="utf-8") as f:
             data = json.load(f)
             return data.get("domains", [])
     except (FileNotFoundError, json.JSONDecodeError):
         # Fallback obbligatorio per evitare crash all'avvio
-        return ["www.reddit.com", "it.wikipedia.org", "en.wikipedia.org"]
+        # MAI restituire un dizionario
+        print("ATTENZIONE: File domains.json non trovato o malformato.")
+        return []
+
 
 def load_gs_data(domain: str) -> list[dict]:
     """Legge il file GS usando percorsi relativi alla posizione dello script."""
-    
     # 1. Identifica la cartella dove si trova server.py (backend/src/)
     current_dir = os.path.dirname(os.path.abspath(__file__))
     
@@ -62,6 +67,7 @@ def load_gs_data(domain: str) -> list[dict]:
         print(f"ERRORE durante la lettura: {e}")
         return []
 
+
 # --- ENDPOINTS ---
 
 @app.get("/domains", response_model=DomainsResponse)
@@ -73,9 +79,7 @@ async def get_domains():
 
 @app.get("/parse", response_model=ParsedDocument)
 async def parse_url(url: str = Query(..., description="L'URL da parsare")):
-    """
-    Seleziona automaticamente il parser corretto ed esegue il parsing.
-    """
+    """Seleziona automaticamente il parser corretto ed esegue il parsing."""
     parsed_url = urlparse(url)
     domain = parsed_url.netloc
     domini_supportati = load_supported_domains()
@@ -85,10 +89,14 @@ async def parse_url(url: str = Query(..., description="L'URL da parsare")):
     
     try:
         # Selezione del parser in base al contenuto del dominio
-        if "reddit" in domain:
-            risultato = await parse_reddit_post(url)
-        elif "wikipedia" in domain:
+        if "wikipedia" in domain:
             risultato = await parse_wikipedia_post(url)
+        elif "rockol" in domain:
+            risultato = await parse_rockol_post(url)
+        elif "grammy" in domain:
+            risultato = await parse_grammy_post(url)
+        elif "accuweather" in domain:
+            risultato = await parse_accuweather_post(url)
         else:
             raise HTTPException(status_code=400, detail="Parser non implementato per questo dominio")
             
@@ -156,11 +164,17 @@ async def get_full_gs_eval(domain: str = Query(...)):
     for entry in gs_list:
         try:
             # Parsing live dell'URL del GS
-            if "reddit" in domain:
-                parsed_data = await parse_reddit_post(entry["url"])
-            else:
+            if "wikipedia" in domain:
                 parsed_data = await parse_wikipedia_post(entry["url"])
-            
+            elif "rockol" in domain:
+                parsed_data = await parse_rockol_post(entry["url"])
+            elif "grammy" in domain:
+                parsed_data = await parse_grammy_post(entry["url"])
+            elif "accuweather" in domain:
+                parsed_data = await parse_accuweather_post(entry["url"])
+            else:
+                continue
+                
             # Calcolo metriche sul singolo documento
             m = calcola_metriche_token(parsed_data.get("parsed_text", ""), entry["gold_text"])
             p.append(m["precision"])
@@ -168,7 +182,9 @@ async def get_full_gs_eval(domain: str = Query(...)):
             f1.append(m["f1"])
         except Exception:
             # Se un documento fallisce, contribuisce con 0 alla media
-            p.append(0.0); r.append(0.0); f1.append(0.0)
+            p.append(0.0)
+            r.append(0.0)
+            f1.append(0.0)
             
     # Calcolo medie
     n = len(gs_list)
