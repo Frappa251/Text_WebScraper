@@ -41,18 +41,18 @@ class BackendClient:
             return res.json().get("gold_text", "")
         return ""
 
-    def evaluate(self, parsed_text: str, gold_text: str) -> Optional[Dict[str, float]]:
-        """Invia i testi al backend per il calcolo delle metriche."""
+    def evaluate(self, parsed_text: str, gold_text: str) -> Optional[Dict[str, Any]]:
+        """Invia i testi al backend per il calcolo di TUTTE le metriche."""
         payload = {"parsed_text": parsed_text, "gold_text": gold_text}
         res = requests.post(f"{self.base_url}/evaluate", json=payload)
         if res.status_code == 200:
-            return res.json().get("token_level_eval", {})
+            return res.json()  # Ora restituisce TUTTO il dizionario (token_level + x_eval)
         return None
 
 app = FastAPI(title="Minerva Web UI")
+
 # Calcola il percorso assoluto della cartella templates partendo da questo file (frontend/src)
 current_dir = os.path.dirname(__file__)
-# Risale di una cartella per arrivare a frontend/ e poi entra in templates/
 templates_dir = os.path.join(current_dir, "..", "templates")
 
 # Inizializza Jinja2 con il percorso calcolato in modo sicuro
@@ -87,10 +87,16 @@ def process_url(request: Request, url_libero: str = Form(""), url_tendina: str =
         
         gold_text = api_client.get_gold_standard(target_url)
         has_gs = bool(gold_text)
+        
         metrics = None
+        x_eval = None
 
         if has_gs:
-            metrics = api_client.evaluate(parsed_data.get("parsed_text", ""), gold_text)
+            # Estraiamo le metriche divise dal dizionario
+            eval_result = api_client.evaluate(parsed_data.get("parsed_text", ""), gold_text)
+            if eval_result:
+                metrics = eval_result.get("token_level_eval", {})
+                x_eval = eval_result.get("x_eval", {})
 
         return templates.TemplateResponse(
             request=request, 
@@ -101,7 +107,8 @@ def process_url(request: Request, url_libero: str = Form(""), url_tendina: str =
                 "parsed_text": parsed_data.get("parsed_text", ""),
                 "has_gs": has_gs,
                 "gold_text": gold_text,
-                "metrics": metrics
+                "metrics": metrics,
+                "x_eval": x_eval  # Passiamo la variabile Extra al template
             }
         )
 
