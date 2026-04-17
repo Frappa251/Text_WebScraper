@@ -50,7 +50,14 @@ class BackendClient:
         return None
 
 app = FastAPI(title="Minerva Web UI")
-templates = Jinja2Templates(directory="templates")
+# Calcola il percorso assoluto della cartella templates partendo da questo file (frontend/src)
+current_dir = os.path.dirname(__file__)
+# Risale di una cartella per arrivare a frontend/ e poi entra in templates/
+templates_dir = os.path.join(current_dir, "..", "templates")
+
+# Inizializza Jinja2 con il percorso calcolato in modo sicuro
+templates = Jinja2Templates(directory=templates_dir)
+
 # Inizializziamo la classe client
 api_client = BackendClient(base_url=os.getenv("BACKEND_URL", "http://127.0.0.1:8003"))
 
