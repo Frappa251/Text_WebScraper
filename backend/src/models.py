@@ -10,6 +10,12 @@ class ParsedDocument(BaseModel):
     html_text: str
     parsed_text: str
 
+# POST /parse
+class ParseHtmlInput(BaseModel):
+    """Modello per l'input dell'endpoint di parsing da HTML diretto."""
+    url: str
+    html_text: str
+
 # GET /domains
 class DomainsResponse(BaseModel):
     """Modello per la risposta contenente la lista dei domini supportati."""

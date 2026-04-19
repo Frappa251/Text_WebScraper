@@ -10,7 +10,6 @@ class WikipediaParser:
 
     @staticmethod
     def clean_wikipedia_markdown(text: str) -> str:
-        """Pulisce il markdown generato rimuovendo link e spaziature extra."""
         text = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', text)
         text = text.replace("**", "").replace("__", "")
         cleaned = []
@@ -28,7 +27,6 @@ class WikipediaParser:
 
     @staticmethod
     def extract_wikipedia_main_content(html: str) -> str:
-        """Estrae il contenuto testuale ignorando tabelle laterali e riferimenti."""
         soup = BeautifulSoup(html, "html.parser")
         title_tag = soup.find("span", class_="mw-page-title-main") or soup.find("h1")
         title = title_tag.get_text(strip=True) if title_tag else ""
@@ -98,7 +96,6 @@ class WikipediaParser:
         return WikipediaParser.clean_wikipedia_markdown(raw_md)
 
     async def parse(self, url: str) -> Dict[str, Any]:
-        """Metodo principale che scarica e formatta la pagina di Wikipedia."""
         browser_cfg = BrowserConfig(headless=True)
         run_cfg = CrawlerRunConfig(cache_mode=CacheMode.BYPASS)
 
@@ -121,3 +118,22 @@ class WikipediaParser:
                 "html_text": html,
                 "parsed_text": parsed_markdown,
             }
+
+    async def parse_html(self, url: str, html_text: str) -> Dict[str, Any]:
+        """Parsing da HTML diretto (identico al parse normale ma senza crawling)."""
+        if not html_text or not html_text.strip():
+            return {}
+
+        parsed_markdown = self.extract_wikipedia_main_content(html_text)
+
+        soup = BeautifulSoup(html_text, "html.parser")
+        title_tag = soup.find("span", class_="mw-page-title-main") or soup.find("h1")
+        title = title_tag.get_text(strip=True) if title_tag else "Wikipedia Page"
+
+        return {
+            "url": url,
+            "domain": urlparse(url).netloc,
+            "title": title,
+            "html_text": html_text,
+            "parsed_text": parsed_markdown,
+        }
