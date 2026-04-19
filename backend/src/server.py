@@ -5,7 +5,16 @@ from fastapi.responses import RedirectResponse
 from urllib.parse import urlparse
 from typing import List, Dict, Any
 
-from .models import ParsedDocument, DomainsResponse, GSEntry, FullGSResponse, EvalInput, EvalResponse, TokenLevelEval
+from .models import (
+    ParsedDocument,
+    ParseHtmlInput,
+    DomainsResponse,
+    GSEntry,
+    FullGSResponse,
+    EvalInput,
+    EvalResponse,
+    TokenLevelEval
+)
 from .evaluator import TextEvaluator
 from .parsers.wikipedia_parser import WikipediaParser
 from .parsers.rockol_parser import RockolParser
@@ -87,6 +96,34 @@ async def parse_url(url: str = Query(..., description="L'URL da parsare")) -> Pa
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Errore interno: {str(e)}")
 
+@app.post("/parse", response_model=ParsedDocument)
+async def parse_html(data: ParseHtmlInput) -> ParsedDocument:
+    """Seleziona dinamicamente il parser corretto ed esegue il parsing su html_text diretto."""
+    domain = urlparse(data.url).netloc
+    if domain not in data_manager.load_supported_domains():
+        raise HTTPException(status_code=400, detail="Dominio non supportato")
+
+    try:
+        if "wikipedia" in domain:
+            risultato = await WikipediaParser().parse_html(data.url, data.html_text)
+        elif "rockol" in domain:
+            risultato = await RockolParser().parse_html(data.url, data.html_text)
+        elif "grammy" in domain:
+            risultato = await GrammyParser().parse_html(data.url, data.html_text)
+        elif "accuweather" in domain:
+            risultato = await AccuweatherParser().parse_html(data.url, data.html_text)
+        else:
+            raise HTTPException(status_code=400, detail="Parser non implementato")
+
+        if not risultato or not risultato.get("html_text"):
+            raise HTTPException(status_code=404, detail="Parsing fallito")
+
+        return ParsedDocument(**risultato)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Errore interno: {str(e)}")
+
 @app.get("/gold_standard", response_model=GSEntry)
 async def get_gold_standard(url: str = Query(...)) -> GSEntry:
     """Restituisce la singola entry del Gold Standard associata all'URL."""
@@ -128,10 +165,16 @@ async def evaluate_url(url: str = Query(...)) -> EvalResponse:
         raise HTTPException(status_code=404, detail="URL non nel Gold Standard")
     
     try:
-        if "wikipedia" in domain: parsed_data = await WikipediaParser().parse(url)
-        elif "rockol" in domain: parsed_data = await RockolParser().parse(url)
-        elif "grammy" in domain: parsed_data = await GrammyParser().parse(url)
-        elif "accuweather" in domain: parsed_data = await AccuweatherParser().parse(url)
+        if "wikipedia" in domain:
+            parsed_data = await WikipediaParser().parse(url)
+        elif "rockol" in domain:
+            parsed_data = await RockolParser().parse(url)
+        elif "grammy" in domain:
+            parsed_data = await GrammyParser().parse(url)
+        elif "accuweather" in domain:
+            parsed_data = await AccuweatherParser().parse(url)
+        else:
+            raise HTTPException(status_code=400, detail="Parser non implementato")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
@@ -139,7 +182,10 @@ async def evaluate_url(url: str = Query(...)) -> EvalResponse:
         raise HTTPException(status_code=404, detail="Parsing vuoto")
     
     result = TextEvaluator.valuta_testo(parsed_data["parsed_text"], gold_entry["gold_text"])
-    return EvalResponse(token_level_eval=TokenLevelEval(**result["token_level_eval"]), x_eval=result["x_eval"])
+    return EvalResponse(
+        token_level_eval=TokenLevelEval(**result["token_level_eval"]),
+        x_eval=result["x_eval"]
+    )
 
 @app.get("/full_gs_eval", response_model=EvalResponse)
 async def get_full_gs_eval(domain: str = Query(...)) -> EvalResponse:
@@ -155,11 +201,16 @@ async def get_full_gs_eval(domain: str = Query(...)) -> EvalResponse:
     
     for entry in gs_list:
         try:
-            if "wikipedia" in domain: parsed_data = await WikipediaParser().parse(entry["url"])
-            elif "rockol" in domain: parsed_data = await RockolParser().parse(entry["url"])
-            elif "grammy" in domain: parsed_data = await GrammyParser().parse(entry["url"])
-            elif "accuweather" in domain: parsed_data = await AccuweatherParser().parse(entry["url"])
-            else: continue
+            if "wikipedia" in domain:
+                parsed_data = await WikipediaParser().parse(entry["url"])
+            elif "rockol" in domain:
+                parsed_data = await RockolParser().parse(entry["url"])
+            elif "grammy" in domain:
+                parsed_data = await GrammyParser().parse(entry["url"])
+            elif "accuweather" in domain:
+                parsed_data = await AccuweatherParser().parse(entry["url"])
+            else:
+                continue
                 
             result = TextEvaluator.valuta_testo(parsed_data.get("parsed_text", ""), entry["gold_text"])
             m = result["token_level_eval"]
@@ -168,12 +219,17 @@ async def get_full_gs_eval(domain: str = Query(...)) -> EvalResponse:
             f1.append(m["f1"])
             jaccard_list.append(result["x_eval"]["jaccard_similarity"])
         except Exception:
-            p.append(0.0); r.append(0.0); f1.append(0.0); jaccard_list.append(0.0)
+            p.append(0.0)
+            r.append(0.0)
+            f1.append(0.0)
+            jaccard_list.append(0.0)
             
     n = len(gs_list)
     return EvalResponse(
         token_level_eval=TokenLevelEval(
-            precision=round(sum(p)/n, 4), recall=round(sum(r)/n, 4), f1=round(sum(f1)/n, 4)
+            precision=round(sum(p) / n, 4),
+            recall=round(sum(r) / n, 4),
+            f1=round(sum(f1) / n, 4)
         ),
-        x_eval={"jaccard_similarity": round(sum(jaccard_list)/n, 4)}
+        x_eval={"jaccard_similarity": round(sum(jaccard_list) / n, 4)}
     )
