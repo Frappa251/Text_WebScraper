@@ -1,5 +1,4 @@
-FROM python:3.14-rc-slim 
-# (Nota: se hai problemi con la 3.14, puoi usare python:3.11-slim che è stabilissima)
+FROM python:3.11-slim 
 
 # Disabilita la cache di Python e forza i log a schermo
 ENV PYTHONDONTWRITEBYTECODE 1
@@ -7,8 +6,9 @@ ENV PYTHONUNBUFFERED 1
 
 WORKDIR /app
 
-# Installa le dipendenze di sistema necessarie per il browser di Playwright (crawl4ai)
+# Aggiunti gcc, libxml2-dev e libxslt1-dev per risolvere l'errore di lxml
 RUN apt-get update && apt-get install -y \
+    gcc libxml2-dev libxslt1-dev \
     libgbm-dev libasound2 libnss3 libxss1 libatk1.0-0 libatk-bridge2.0-0 \
     libcups2 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxrandr2 \
     libpango-1.0-0 libcairo2 \
