@@ -202,13 +202,13 @@ async def get_full_gs_eval(domain: str = Query(...)) -> EvalResponse:
     for entry in gs_list:
         try:
             if "wikipedia" in domain:
-                parsed_data = await WikipediaParser().parse(entry["url"])
+                parsed_data = await WikipediaParser().parse_html(entry["url"], entry["html_text"])
             elif "rockol" in domain:
-                parsed_data = await RockolParser().parse(entry["url"])
+                parsed_data = await RockolParser().parse_html(entry["url"], entry["html_text"])
             elif "grammy" in domain:
-                parsed_data = await GrammyParser().parse(entry["url"])
+                parsed_data = await GrammyParser().parse_html(entry["url"], entry["html_text"])
             elif "accuweather" in domain:
-                parsed_data = await AccuweatherParser().parse(entry["url"])
+                parsed_data = await AccuweatherParser().parse_html(entry["url"], entry["html_text"])
             else:
                 continue
                 

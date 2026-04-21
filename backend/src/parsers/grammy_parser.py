@@ -11,7 +11,14 @@ logger = logging.getLogger(__name__)
 
 EXACT_NOISE_TEXT = {"read more", "subscribe to newsletters", "join us on social", "related", "latest news", "you may also like", "facebook", "twitter", "email", "e-mail", "music news", "feature", "news"}
 STOP_TEXT_PATTERNS = [r"^read more$", r"^related$", r"^latest news$", r"^you may also like$", r"^more from$", r"^recommended$"]
-NOISE_TEXT_PATTERNS = [r"^photo:\s*", r"^graphic courtesy", r"^all photos courtesy", r"^follow .*", r"^share this.*", r"^advertisement$", r"^sign up.*", r".*newsletter.*", r"^more from.*", r"^related.*", r"^latest news.*"]
+NOISE_TEXT_PATTERNS = [
+    r"^photo:\s*", r"^photo by\s*", r"^photograph by\s*", r"^image.*courtesy", 
+    r"^watch:\s*", r"^read:\s*\[", r"^listen:\s*", r"^exclusive:\s*", # Made 'read:' more specific
+    r"^graphic courtesy", r"^all photos courtesy", 
+    r"^follow .*", r"^share this.*", r"^advertisement$", 
+    r"^sign up.*", r".*newsletter.*", r"^more from.*", 
+    r"^related.*", r"^latest news.*"
+]
 NOISY_CONTAINER_HINTS = ["related", "promo", "card", "teaser", "recommended", "share", "social", "newsletter"]
 
 class GrammyParser:
@@ -75,7 +82,7 @@ class GrammyParser:
             return False
         if "|" in t:
             return True
-        promo_patterns = [r"^watch ", r"^listen to ", r"^see the full ", r"^read: ", r"^exclusive: "]
+        promo_patterns = [r"^watch ", r"^listen to ", r"^see the full ", r"^exclusive: "]
         return any(re.search(p, t.lower(), re.IGNORECASE) for p in promo_patterns)
 
     @staticmethod
@@ -91,7 +98,13 @@ class GrammyParser:
 
     @staticmethod
     def remove_global_noise(soup: BeautifulSoup) -> None:
-        for selector in ["script", "style", "noscript", "iframe", "svg", "form", "button", "nav", "footer", "aside"]:
+        selectors_da_eliminare = [
+            "script", "style", "noscript", "iframe", "svg", "form", "button", 
+            "nav", "footer", "aside", "header", 
+            ".social-share", ".newsletter", ".related", ".promo-banner", 
+            ".ad-container", ".advertisement"
+        ]
+        for selector in selectors_da_eliminare:
             for tag in soup.select(selector):
                 tag.decompose()
 

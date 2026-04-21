@@ -51,6 +51,7 @@ class RockolParser:
 
             if main_content:
                 selectors_da_eliminare = [
+                    "h1",  # <--- AGGIUNTO QUI: Rimuove l'h1 dal corpo per evitare il titolo doppio
                     "img", "figure", "picture",
                     ".related-box", ".correlati", ".related",
                     ".social-share", ".social-buttons",
@@ -135,6 +136,7 @@ class RockolParser:
 
         if main_content:
             selectors_da_eliminare = [
+                "h1",  # <--- AGGIUNTO QUI: Rimuove l'h1 dal corpo per evitare il titolo doppio
                 "img", "figure", "picture",
                 ".related-box", ".correlati", ".related",
                 ".social-share", ".social-buttons",
