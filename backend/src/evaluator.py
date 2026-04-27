@@ -11,21 +11,37 @@ class TextEvaluator:
 
     @staticmethod
     def normalize_text(text: str) -> str:
-        """Pulisce il testo per il confronto (rimuove markdown e punteggiatura)."""
+        """
+        Pulisce e standardizza una stringa di testo per prepararla al confronto metrico: 
+        converte in minuscolo, rimuove link markdown, simboli spuri e punteggiatura.
+
+        Args:
+            text (str): Il testo grezzo da normalizzare.
+
+        Returns:
+            str: Il testo pulito e privo di punteggiatura.
+        """
         if not text:
             return ""
         text = text.lower()
-        # Rimuove i link Markdown [testo](url) tenendo solo 'testo'
         text = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', text)
-        # Rimuove simboli Markdown residui
         text = re.sub(r'[\*#_]', '', text)
-        # Rimuove punteggiatura e normalizza spazi
         text = text.translate(str.maketrans('', '', string.punctuation))
         return " ".join(text.split())
 
     @staticmethod
     def calcola_metriche_token(parsed_text: str, gold_text: str) -> Dict[str, float]:
-        """Calcola Precision, Recall e F1-Score a livello di token."""
+        """
+        Calcola le metriche di classificazione (Precision, Recall, F1-Score) confrontando 
+        le frequenze dei token (parole) tra il testo estratto e il Gold Standard.
+
+        Args:
+            parsed_text (str): Il testo prodotto dal sistema di parsing.
+            gold_text (str): Il testo di riferimento perfetto (Gold Standard).
+
+        Returns:
+            Dict[str, float]: Dizionario contenente i valori di precision, recall e f1 arrotondati.
+        """
         p_tokens = TextEvaluator.normalize_text(parsed_text).split()
         g_tokens = TextEvaluator.normalize_text(gold_text).split()
 
@@ -48,7 +64,17 @@ class TextEvaluator:
 
     @staticmethod
     def calcola_jaccard(parsed_text: str, gold_text: str) -> float:
-        """Calcola la Jaccard similarity tra i token normalizzati."""
+        """
+        Calcola l'indice di somiglianza di Jaccard (intersezione su unione) tra gli insiemi 
+        unici di parole del testo parsato e del Gold Standard.
+
+        Args:
+            parsed_text (str): Il testo prodotto dal sistema di parsing.
+            gold_text (str): Il testo di riferimento (Gold Standard).
+
+        Returns:
+            float: Il coefficiente di similarità di Jaccard arrotondato a 4 decimali.
+        """
         p_tokens = set(TextEvaluator.normalize_text(parsed_text).split())
         g_tokens = set(TextEvaluator.normalize_text(gold_text).split())
 
@@ -62,7 +88,17 @@ class TextEvaluator:
 
     @staticmethod
     def valuta_testo(parsed_text: str, gold_text: str) -> Dict[str, Any]:
-        """Restituisce tutte le metriche di valutazione combinate."""
+        """
+        Metodo orchestratore che aggrega tutte le metriche di valutazione (token-level e custom) 
+        in un'unica struttura dati.
+
+        Args:
+            parsed_text (str): Il testo estratto dal parser.
+            gold_text (str): Il testo di riferimento.
+
+        Returns:
+            Dict[str, Any]: Dizionario strutturato contenente 'token_level_eval' e metriche 'x_eval'.
+        """
         return {
             "token_level_eval": TextEvaluator.calcola_metriche_token(parsed_text, gold_text),
             "x_eval": {

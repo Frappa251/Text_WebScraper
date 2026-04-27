@@ -13,6 +13,12 @@ class RockolParser:
         """
         Esegue il crawling dell'URL specificato, individua il contenuto principale,
         rimuove gli elementi di disturbo e restituisce il testo in formato Markdown.
+
+        Args:
+            url (str): URL passato alla funzione
+
+        Returns:
+            Dict[str, Any]: Dizionario con chiave gli elementi per la risposta del parser
         """
         dominio = urlparse(url).netloc
         dati: Dict[str, Any] = {
@@ -51,7 +57,7 @@ class RockolParser:
 
             if main_content:
                 selectors_da_eliminare = [
-                    "h1",  # <--- AGGIUNTO QUI: Rimuove l'h1 dal corpo per evitare il titolo doppio
+                    "h1",
                     "img", "figure", "picture",
                     ".related-box", ".correlati", ".related",
                     ".social-share", ".social-buttons",
@@ -136,7 +142,7 @@ class RockolParser:
 
         if main_content:
             selectors_da_eliminare = [
-                "h1",  # <--- AGGIUNTO QUI: Rimuove l'h1 dal corpo per evitare il titolo doppio
+                "h1",
                 "img", "figure", "picture",
                 ".related-box", ".correlati", ".related",
                 ".social-share", ".social-buttons",

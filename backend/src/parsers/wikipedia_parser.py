@@ -10,6 +10,17 @@ class WikipediaParser:
 
     @staticmethod
     def clean_wikipedia_markdown(text: str) -> str:
+        """
+        Ripulisce il testo in formato Markdown generato da Wikipedia, rimuovendo 
+        i link testuali (mantenendo solo il testo), formattazioni in grassetto/corsivo 
+        e le righe vuote consecutive.
+
+        Args:
+            text (str): Il testo in formato Markdown da ripulire.
+
+        Returns:
+            str: Il testo Markdown ripulito e formattato.
+        """
         text = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', text)
         text = text.replace("**", "").replace("__", "")
         cleaned = []
@@ -27,6 +38,18 @@ class WikipediaParser:
 
     @staticmethod
     def extract_wikipedia_main_content(html: str) -> str:
+        """
+        Estrae il contenuto principale da una pagina HTML di Wikipedia, eliminando elementi 
+        di disturbo come infobox, tabelle di navigazione, note a piè di pagina e riferimenti. 
+        L'estrazione si interrompe automaticamente quando incontra sezioni conclusive 
+        come "See also" o "References". Gestisce anche le pagine di disambiguazione e le tabelle.
+
+        Args:
+            html (str): Il codice HTML grezzo della pagina di Wikipedia.
+
+        Returns:
+            str: Il contenuto principale dell'articolo convertito in Markdown pulito.
+        """
         soup = BeautifulSoup(html, "html.parser")
         title_tag = soup.find("span", class_="mw-page-title-main") or soup.find("h1")
         title = title_tag.get_text(strip=True) if title_tag else ""
@@ -96,6 +119,18 @@ class WikipediaParser:
         return WikipediaParser.clean_wikipedia_markdown(raw_md)
 
     async def parse(self, url: str) -> Dict[str, Any]:
+        """
+        Esegue il crawling asincrono di un URL di Wikipedia, scarica l'HTML 
+        e ne estrae il testo formattato in Markdown.
+
+        Args:
+            url (str): L'URL della pagina di Wikipedia da parsare.
+
+        Returns:
+            Dict[str, Any]: Un dizionario contenente URL, dominio, titolo della pagina, 
+                            codice HTML grezzo e testo parsato in Markdown. 
+                            Restituisce un dizionario vuoto in caso di fallimento.
+        """
         browser_cfg = BrowserConfig(headless=True)
         run_cfg = CrawlerRunConfig(cache_mode=CacheMode.BYPASS)
 
@@ -120,7 +155,20 @@ class WikipediaParser:
             }
 
     async def parse_html(self, url: str, html_text: str) -> Dict[str, Any]:
-        """Parsing da HTML diretto (identico al parse normale ma senza crawling)."""
+        """
+        Esegue il parsing e l'estrazione del contenuto partendo direttamente da una stringa HTML 
+        già fornita in input, mantenendo la stessa logica del metodo parse ma senza 
+        effettuare il crawling della pagina.
+
+        Args:
+            url (str): L'URL originale della pagina web (utilizzato per popolare i metadati).
+            html_text (str): Il codice HTML grezzo da cui estrarre il testo.
+
+        Returns:
+            Dict[str, Any]: Un dizionario contenente URL, dominio, titolo della pagina, 
+                            codice HTML grezzo e testo parsato in Markdown. 
+                            Restituisce un dizionario vuoto se l'HTML fornito è vuoto o nullo.
+        """
         if not html_text or not html_text.strip():
             return {}
 

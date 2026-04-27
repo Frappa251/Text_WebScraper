@@ -22,14 +22,35 @@ NOISE_TEXT_PATTERNS = [
 NOISY_CONTAINER_HINTS = ["related", "promo", "card", "teaser", "recommended", "share", "social", "newsletter"]
 
 class GrammyParser:
-    """Classe dedicata all'estrazione degli articoli dal dominio Grammy.com."""
+    """
+    Classe dedicata all'estrazione degli articoli dal dominio Grammy.com.
+    """
 
     @staticmethod
     def normalize_text(text: str) -> str:
+        """
+        Normalizza il testo tramite le regex rimuovendo spazi multipli e spazi iniziali/finali.
+
+        Args:
+            text (str): Il testo da normalizzare.
+
+        Returns:
+            str: La stringa normalizzata.
+        """
         return re.sub(r"\s+", " ", text or "").strip()
 
     @staticmethod
     def clean_grammy_markdown(text: str) -> str:
+        """
+        Pulisce il markdown generato rimuovendo formattazioni superflue, link markdown, 
+        immagini e righe di testo note come "rumore".
+
+        Args:
+            text (str): Il testo in formato markdown da pulire.
+
+        Returns:
+            str: Il markdown pulito e pronto per l'output finale.
+        """
         text = text.replace("**", "").replace("__", "")
         text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
         text = re.sub(r"!\[[^\]]*\]\([^)]+\)", "", text)
@@ -51,6 +72,16 @@ class GrammyParser:
 
     @staticmethod
     def normalize_attrs(tag: Tag) -> str:
+        """
+        Estrae e normalizza gli attributi chiave (class, id, role, ecc.) di un tag 
+        in un'unica stringa minuscola per facilitare la ricerca di pattern.
+
+        Args:
+            tag (Tag): Il tag BeautifulSoup da analizzare.
+
+        Returns:
+            str: Una stringa contenente i valori degli attributi uniti e in minuscolo.
+        """
         values = []
         classes = tag.get("class", [])
         if isinstance(classes, list):
@@ -65,18 +96,49 @@ class GrammyParser:
 
     @staticmethod
     def is_noise_text(text: str) -> bool:
+        """
+        Verifica se una stringa di testo corrisponde a pattern noti di "rumore" 
+        (es. crediti fotografici, inviti social, pubblicità).
+
+        Args:
+            text (str): Il testo da verificare.
+
+        Returns:
+            bool: True se il testo è considerato rumore, False altrimenti.
+        """
         t = GrammyParser.normalize_text(text).lower()
         if not t or t in EXACT_NOISE_TEXT:
             return True
         return any(re.search(p, t, re.IGNORECASE) for p in NOISE_TEXT_PATTERNS)
 
     @staticmethod
+    
     def is_stop_text(text: str) -> bool:
+        """
+        Verifica se una stringa di testo corrisponde a pattern di interruzione definitivi 
+        (es. "read more", "related"), indicando la fine dell'articolo principale.
+
+        Args:
+            text (str): Il testo da verificare.
+
+        Returns:
+            bool: True se il testo indica la fine dell'articolo, False altrimenti.
+        """
         t = GrammyParser.normalize_text(text).lower()
         return any(re.search(p, t, re.IGNORECASE) for p in STOP_TEXT_PATTERNS)
 
     @staticmethod
     def looks_like_new_article_title(text: str) -> bool:
+        """
+        Verifica se il testo sembra essere il titolo di un nuovo articolo correlato o promozionale, 
+        basandosi su lunghezza, punteggiatura e pattern specifici.
+
+        Args:
+            text (str): Il testo da analizzare.
+
+        Returns:
+            bool: True se il testo sembra un nuovo titolo promozionale/correlato, False altrimenti.
+        """
         t = GrammyParser.normalize_text(text)
         if len(t) < 20 or len(t) > 160 or t.endswith("."):
             return False
@@ -87,6 +149,17 @@ class GrammyParser:
 
     @staticmethod
     def is_probable_teaser(tag: Tag, text: str) -> bool:
+        """
+        Determina se un tag e il suo testo costituiscono un probabile "teaser" 
+        (es. card promozionali, newsletter) analizzando classi CSS e densità di link.
+
+        Args:
+            tag (Tag): Il tag HTML da esaminare.
+            text (str): Il testo contenuto all'interno del tag.
+
+        Returns:
+            bool: True se l'elemento è un probabile teaser, False altrimenti.
+        """
         attrs = GrammyParser.normalize_attrs(tag)
         if any(hint in attrs for hint in NOISY_CONTAINER_HINTS):
             return True
@@ -98,6 +171,16 @@ class GrammyParser:
 
     @staticmethod
     def remove_global_noise(soup: BeautifulSoup) -> None:
+        """
+        Rimuove preventivamente dall'albero DOM gli elementi non desiderati come script, 
+        footer, header, widget social e banner pubblicitari.
+
+        Args:
+            soup (BeautifulSoup): L'oggetto BeautifulSoup che rappresenta l'HTML parsato.
+
+        Returns:
+            None: La funzione modifica l'oggetto soup in-place.
+        """
         selectors_da_eliminare = [
             "script", "style", "noscript", "iframe", "svg", "form", "button", 
             "nav", "footer", "aside", "header", 
@@ -110,6 +193,18 @@ class GrammyParser:
 
     @staticmethod
     def extract_following_blocks_from_title(title_tag: Tag, is_roundup: bool = False) -> list[str]:
+        """
+        Estrae i blocchi di contenuto (paragrafi, liste, intestazioni) successivi al tag 
+        del titolo, interrompendosi quando incontra pattern di stop o troppo rumore.
+
+        Args:
+            title_tag (Tag): Il tag BeautifulSoup corrispondente al titolo principale.
+            is_roundup (bool, optional): Flag per indicare se l'articolo è una raccolta (roundup) 
+                                         con logiche di estrazione più tolleranti. Default a False.
+
+        Returns:
+            list[str]: Una lista di stringhe HTML corrispondenti ai blocchi estratti.
+        """
         parts, seen_html = [], set()
         started, valid_p_count, bad_streak = False, 0, 0
         title_text = GrammyParser.normalize_text(title_tag.get_text(" ", strip=True))
@@ -171,6 +266,17 @@ class GrammyParser:
 
     @staticmethod
     def extract_grammy_main_content(html: str, url: str) -> str:
+        """
+        Coordina l'estrazione del contenuto principale della pagina di Grammy.com, 
+        ripulendo l'HTML, individuando il titolo ed estraendo i blocchi di testo successivi.
+
+        Args:
+            html (str): Il codice HTML grezzo della pagina web.
+            url (str): L'URL della pagina (utilizzato per dedurre il tipo di articolo).
+
+        Returns:
+            str: Il testo finale dell'articolo formattato in Markdown e ripulito.
+        """
         soup = BeautifulSoup(html, "html.parser")
         GrammyParser.remove_global_noise(soup)
         title_tag = soup.find("h1")
@@ -205,7 +311,16 @@ class GrammyParser:
         ) if parts else ""
 
     async def parse(self, url: str) -> Dict[str, Any]:
-        """Metodo principale che scarica e formatta la pagina di Grammy."""
+        """
+        Metodo principale che scarica e formatta la pagina di Grammy tramite un crawler asincrono.
+
+        Args:
+            url (str): L'URL della pagina web da parsare.
+
+        Returns:
+            Dict[str, Any]: Un dizionario contenente URL, dominio, titolo, HTML grezzo 
+                            e testo parsato in formato Markdown.
+        """
         try:
             browser_cfg = BrowserConfig(headless=True)
             run_cfg = CrawlerRunConfig(cache_mode=CacheMode.BYPASS)
@@ -230,7 +345,18 @@ class GrammyParser:
             return {}
 
     async def parse_html(self, url: str, html_text: str) -> Dict[str, Any]:
-        """Metodo che esegue il parsing partendo da HTML diretto già fornito in input."""
+        """
+        Metodo che esegue il parsing partendo da HTML diretto già fornito in input, 
+        senza effettuare il crawling della pagina.
+
+        Args:
+            url (str): L'URL originale della pagina web.
+            html_text (str): Il codice HTML grezzo da cui estrarre il testo.
+
+        Returns:
+            Dict[str, Any]: Un dizionario contenente URL, dominio, titolo, HTML grezzo 
+                            e testo parsato in formato Markdown.
+        """
         try:
             if not html_text or not html_text.strip():
                 return {}

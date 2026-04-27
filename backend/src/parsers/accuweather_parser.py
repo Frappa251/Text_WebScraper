@@ -9,7 +9,16 @@ class AccuweatherParser:
     """Classe dedicata all'estrazione e pulizia delle previsioni da AccuWeather."""
 
     async def parse(self, url: str) -> Dict[str, Any]:
-        """Scarica e pulisce la pagina meteo rimuovendo layout grafici e pubblicità."""
+        """
+        Scarica e pulisce la pagina meteo rimuovendo layout grafici e pubblicità.
+
+        Args:
+            url (str): L'URL della pagina web da parsare.
+
+        Returns:
+            Dict[str, Any]: Un dizionario contenente URL, dominio, titolo, HTML grezzo 
+                            e testo parsato in formato Markdown.
+        """
         dominio = urlparse(url).netloc
         dati: Dict[str, Any] = {
             "url": url,
@@ -80,7 +89,18 @@ class AccuweatherParser:
             return dati
 
     async def parse_html(self, url: str, html_text: str) -> Dict[str, Any]:
-        """Esegue il parsing di HTML diretto mantenendo la stessa logica di pulizia."""
+        """
+        Esegue il parsing di HTML diretto mantenendo la stessa logica di pulizia, 
+        senza effettuare il crawling della pagina.
+
+        Args:
+            url (str): L'URL originale della pagina web.
+            html_text (str): Il codice HTML grezzo da cui estrarre il testo.
+
+        Returns:
+            Dict[str, Any]: Un dizionario contenente URL, dominio, titolo, HTML grezzo 
+                            e testo parsato in formato Markdown.
+        """
         dominio = urlparse(url).netloc
         dati: Dict[str, Any] = {
             "url": url,

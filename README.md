@@ -37,7 +37,7 @@ Each parser must return:
   "parsed_text": "..."
 }
 ```
-2. Gold Standard (GS)
+### 2. Gold Standard (GS)
 
 A manually created dataset used as ground truth to evaluate parser performance.
 
@@ -55,7 +55,7 @@ Format:
   "gold_text": "..."
 }
 ```
-3. Parser Evaluation
+### 3. Parser Evaluation
 
 The system evaluates parsing quality by comparing parser output with the Gold Standard.
 
@@ -96,7 +96,7 @@ Example output:
   "jaccard_similarity": 0.82
 }
 ```
-4. REST API (FastAPI)
+### 4. REST API (FastAPI)
 
 The backend exposes the following endpoints:
 
@@ -119,7 +119,7 @@ Example input:
 ```md
 GET /full_gs_eval → Return aggregated evaluation over a domain
 ```
-5. Web UI
+### 5. Web UI
 
 The frontend provides:
 
@@ -128,7 +128,7 @@ Comparison between raw HTML and cleaned text
 Dropdown menu with GS URLs
 Evaluation results (Precision, Recall, F1, Jaccard)
 
-6. Containerization
+### 6. Containerization
 
 The entire system is containerized using Docker.
 
@@ -159,10 +159,8 @@ progetto/
 │       └── templates/
 └── report.pdf
 ```
-Installation & Usage
-Requirements
-Docker
-Docker Compose
+# Installation & Usage
+
 Run the project
 ```md
 docker compose up --build
