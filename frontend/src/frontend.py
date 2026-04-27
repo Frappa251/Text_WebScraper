@@ -12,7 +12,12 @@ class BackendClient:
         self.base_url = base_url
 
     def get_supported_gs_urls(self) -> List[str]:
-        """Recupera la lista di tutti gli URL presenti nei Gold Standard."""
+        """
+        Recupera la lista di tutti gli URL presenti nei Gold Standard.
+
+        Returns: 
+            List[str]: restituisce una lista di stringhe degli Url del gold standard
+        """
         gs_urls: List[str] = []
         try:
             dom_res = requests.get(f"{self.base_url}/domains")
@@ -28,25 +33,50 @@ class BackendClient:
         return gs_urls
 
     def parse_url(self, url: str) -> Optional[Dict[str, Any]]:
-        """Richiede al backend il parsing di un URL specificato."""
+        """
+        Richiede al backend il parsing di un URL specificato.
+
+        Args: 
+            url (str): URL di uno specifico sito
+
+        Returns:
+            Optional[Dict[str, Any]]: restituisce il parsing dell'url richiesto
+        """
         res = requests.get(f"{self.base_url}/parse", params={"url": url})
         if res.status_code == 200:
             return res.json()
         return None
 
     def get_gold_standard(self, url: str) -> str:
-        """Controlla se esiste il GS per l'URL e restituisce il testo gold."""
+        """
+    Controlla se esiste il GS per l'URL e restituisce il testo gold.
+
+    Args:
+        url (str): URL di cui recuperare il Gold Standard
+
+    Returns:
+        str: restituisce il testo del Gold Standard se presente, altrimenti una stringa vuota
+    """
         res = requests.get(f"{self.base_url}/gold_standard", params={"url": url})
         if res.status_code == 200:
             return res.json().get("gold_text", "")
         return ""
 
     def evaluate(self, parsed_text: str, gold_text: str) -> Optional[Dict[str, Any]]:
-        """Invia i testi al backend per il calcolo di TUTTE le metriche."""
+        """
+    Invia i testi al backend per il calcolo di TUTTE le metriche.
+
+    Args:
+        parsed_text (str): testo pulito estratto dal parser
+        gold_text (str): testo di riferimento del Gold Standard
+
+    Returns:
+        Optional[Dict[str, Any]]: restituisce un dizionario contenente le metriche calcolate o None in caso di errore
+    """
         payload = {"parsed_text": parsed_text, "gold_text": gold_text}
         res = requests.post(f"{self.base_url}/evaluate", json=payload)
         if res.status_code == 200:
-            return res.json()  # Ora restituisce TUTTO il dizionario (token_level + x_eval)
+            return res.json()  
         return None
 
 app = FastAPI(title="Minerva Web UI")
@@ -64,7 +94,15 @@ api_client = BackendClient(base_url=os.getenv("BACKEND_URL", "http://127.0.0.1:8
 
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request) -> HTMLResponse:
-    """Endpoint che carica la homepage, popolando la tendina con gli URL noti."""
+    """
+    Endpoint che carica la homepage, popolando la tendina con gli URL noti.
+
+    Args:
+        request (Request): l'oggetto della richiesta HTTP di FastAPI
+
+    Returns:
+        HTMLResponse: restituisce la pagina HTML della homepage renderizzata
+    """
     gs_urls = api_client.get_supported_gs_urls()
     return templates.TemplateResponse(
         request=request,
@@ -74,7 +112,17 @@ def index(request: Request) -> HTMLResponse:
 
 @app.post("/process", response_class=HTMLResponse)
 def process_url(request: Request, url_libero: str = Form(""), url_tendina: str = Form("")) -> HTMLResponse:
-    """Endpoint che elabora la richiesta form, interroga il backend e renderizza i risultati."""
+    """
+    Endpoint che elabora la richiesta form, interroga il backend e renderizza i risultati.
+
+    Args:
+        request (Request): l'oggetto della richiesta HTTP di FastAPI
+        url_libero (str): URL inserito manualmente dall'utente nel campo di testo
+        url_tendina (str): URL selezionato dall'utente dal menu a tendina
+
+    Returns:
+        HTMLResponse: restituisce la pagina HTML con i risultati dell'estrazione e della valutazione
+    """
     target_url = url_tendina if url_tendina else url_libero
     
     if not target_url:
@@ -92,7 +140,6 @@ def process_url(request: Request, url_libero: str = Form(""), url_tendina: str =
         x_eval = None
 
         if has_gs:
-            # Estraiamo le metriche divise dal dizionario
             eval_result = api_client.evaluate(parsed_data.get("parsed_text", ""), gold_text)
             if eval_result:
                 metrics = eval_result.get("token_level_eval", {})
@@ -108,7 +155,7 @@ def process_url(request: Request, url_libero: str = Form(""), url_tendina: str =
                 "has_gs": has_gs,
                 "gold_text": gold_text,
                 "metrics": metrics,
-                "x_eval": x_eval  # Passiamo la variabile Extra al template
+                "x_eval": x_eval  
             }
         )
 
